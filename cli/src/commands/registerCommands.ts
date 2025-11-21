@@ -1,6 +1,7 @@
 import {Command} from 'commander';
 import {initAction} from './init';
 import {makeStubAction} from './stub';
+import {addAction, statusAction} from './workspace';
 
 export function registerCommands(program: Command): void {
   program
@@ -11,12 +12,12 @@ export function registerCommands(program: Command): void {
   program
     .command('status')
     .description('Show workspace vs index status')
-    .action(makeStubAction('status'));
+    .action(statusAction);
 
   program
     .command('add <file...>')
     .description('Add file(s) to the wit index')
-    .action(makeStubAction('add'));
+    .action(addAction);
 
   program
     .command('commit')

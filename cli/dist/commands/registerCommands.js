@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCommands = registerCommands;
 const init_1 = require("./init");
 const stub_1 = require("./stub");
+const workspace_1 = require("./workspace");
 function registerCommands(program) {
     program
         .command('init [name]')
@@ -11,11 +12,11 @@ function registerCommands(program) {
     program
         .command('status')
         .description('Show workspace vs index status')
-        .action((0, stub_1.makeStubAction)('status'));
+        .action(workspace_1.statusAction);
     program
         .command('add <file...>')
         .description('Add file(s) to the wit index')
-        .action((0, stub_1.makeStubAction)('add'));
+        .action(workspace_1.addAction);
     program
         .command('commit')
         .option('-m, --message <message>', 'commit message')

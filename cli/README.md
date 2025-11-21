@@ -13,9 +13,10 @@ Scaffold for the `wit` Node.js/TypeScript CLI (Commander + Ink).
   node dist/index.js init <repo-name>
   ```
   This creates `.wit/` layout, writes `config.json` with defaults (network testnet, Walrus relay testnet, author/key_alias placeholders), and ensures `.gitignore`/`.witignore` contain `.wit/` and key paths.
-- Other commands are stubbed placeholders until their Stage 1 tasks are implemented.
+- `status` and `add` work: they hash files (sha256-base64), update `.wit/index`, and report workspace vs index state.
+- Remaining commands are stubbed placeholders until their Stage 1 tasks are implemented.
 
 ## Current status
-- Stage 1: CLI command skeleton is wired with Commander; output is rendered through Ink placeholders.
-- Commands stubbed: `status`, `add`, `commit`, `push`, `clone`, `diff`, `log`, `fetch`, `invite`, `push-blob`.
-- Behavior: each command renders a placeholder; business logic will be added in subsequent stage 1 tasks (index/commit engine, config IO, etc.).
+- Stage 1: CLI command skeleton is wired; `init`, `status`, and `add` have working logic (index read/write, workspace scan, hashing).
+- Commands stubbed: `commit`, `push`, `clone`, `diff`, `log`, `fetch`, `invite`, `push-blob`.
+- Behavior: remaining commands render placeholders; business logic will be added in subsequent stage 1 tasks (commit engine, state tracking, etc.).
