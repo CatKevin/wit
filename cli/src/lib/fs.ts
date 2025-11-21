@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import ignore, {Ignore} from 'ignore';
 
 export type FileMeta = {
   hash: string;
@@ -12,6 +13,7 @@ export type FileMeta = {
 export type Index = Record<string, FileMeta>;
 
 const HASH_PREFIX = 'sha256-';
+const DEFAULT_IGNORE_PATTERNS = ['.git', '.wit', 'node_modules'];
 
 export function pathToPosix(p: string): string {
   return p.split(path.sep).join('/');
@@ -22,6 +24,10 @@ export function modeToString(mode: number): string {
   return `100${isExec ? '755' : '644'}`;
 }
 
+export function mtimeSec(stat: {mtimeMs: number}): number {
+  return Math.floor(stat.mtimeMs / 1000);
+}
+
 export async function computeFileMeta(filePath: string): Promise<FileMeta> {
   const stat = await fs.stat(filePath);
   const data = await fs.readFile(filePath);
@@ -30,7 +36,7 @@ export async function computeFileMeta(filePath: string): Promise<FileMeta> {
     hash,
     size: stat.size,
     mode: modeToString(stat.mode),
-    mtime: Math.floor(stat.mtimeMs / 1000),
+    mtime: mtimeSec(stat),
   };
 }
 
@@ -49,21 +55,47 @@ export async function writeIndex(indexPath: string, index: Index): Promise<void>
   await fs.writeFile(indexPath, serialized, 'utf8');
 }
 
-export async function walkFiles(root: string, ignore: Set<string>): Promise<string[]> {
+export async function buildIgnore(root: string, extraPatterns: string[] = []): Promise<Ignore> {
+  const ig = ignore();
+  ig.add(DEFAULT_IGNORE_PATTERNS);
+  ig.add(extraPatterns);
+  for (const file of ['.gitignore', '.witignore']) {
+    try {
+      const raw = await fs.readFile(path.join(root, file), 'utf8');
+      ig.add(raw);
+    } catch (err: any) {
+      if (err?.code !== 'ENOENT') throw err;
+    }
+  }
+  return ig;
+}
+
+export function shouldIgnore(ig: Ignore, relPosix: string, isDir: boolean): boolean {
+  const target = isDir ? (relPosix.endsWith('/') ? relPosix : `${relPosix}/`) : relPosix;
+  return ig.ignores(target);
+}
+
+export async function walkFiles(
+  root: string,
+  ig: Ignore,
+  baseDir: string = root,
+  tracked?: Set<string>
+): Promise<string[]> {
   const entries = await fs.readdir(root, {withFileTypes: true});
   const files: string[] = [];
 
   for (const entry of entries) {
     const full = path.join(root, entry.name);
-    const rel = path.relative(process.cwd(), full);
+    const rel = path.relative(baseDir, full);
     const relPosix = pathToPosix(rel);
+    const isDir = entry.isDirectory();
+    const hasTrackedDesc =
+      tracked && isDir ? Array.from(tracked).some((p) => p === relPosix || p.startsWith(`${relPosix}/`)) : false;
 
-    if (ignore.has(relPosix) || ignore.has(entry.name)) continue;
+    if (shouldIgnore(ig, relPosix, isDir) && !(tracked?.has(relPosix) || hasTrackedDesc)) continue;
 
-    if (entry.isDirectory()) {
-      // avoid descending into ignored dirs early
-      if (ignore.has(relPosix + '/')) continue;
-      const nested = await walkFiles(full, ignore);
+    if (isDir) {
+      const nested = await walkFiles(full, ig, baseDir, tracked);
       files.push(...nested);
     } else if (entry.isFile()) {
       files.push(full);

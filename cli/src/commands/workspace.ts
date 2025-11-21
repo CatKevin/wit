@@ -1,20 +1,33 @@
 import fs from 'fs/promises';
 import path from 'path';
-import {computeFileMeta, pathToPosix, readIndex, walkFiles, writeIndex, Index, FileMeta} from '../lib/fs';
+import {
+  buildIgnore,
+  computeFileMeta,
+  modeToString,
+  mtimeSec,
+  pathToPosix,
+  readIndex,
+  shouldIgnore,
+  walkFiles,
+  writeIndex,
+  Index,
+  FileMeta,
+} from '../lib/fs';
 
 const WIT_DIR = '.wit';
-const DEFAULT_IGNORE = new Set(['.git', '.wit', 'node_modules']);
 
 export async function statusAction(): Promise<void> {
   const witPath = await requireWitDir();
   const indexPath = path.join(witPath, 'index');
   const index = await readIndex(indexPath);
+  const tracked = new Set(Object.keys(index));
 
-  const workspaceFiles = await walkFiles(process.cwd(), DEFAULT_IGNORE);
+  const ig = await buildIgnore(process.cwd());
+  const workspaceFiles = await walkFiles(process.cwd(), ig, process.cwd(), tracked);
   const workspaceMeta: Record<string, FileMeta> = {};
   for (const file of workspaceFiles) {
     const rel = pathToPosix(path.relative(process.cwd(), file));
-    workspaceMeta[rel] = await computeFileMeta(file);
+    workspaceMeta[rel] = await computeMetaWithCache(file, rel, index);
   }
 
   const untracked: string[] = [];
@@ -43,17 +56,31 @@ export async function addAction(paths: string[]): Promise<void> {
   const witPath = await requireWitDir();
   const indexPath = path.join(witPath, 'index');
   const index = await readIndex(indexPath);
+  const ig = await buildIgnore(process.cwd());
+
+  const filesToAdd = new Set<string>();
 
   for (const input of paths) {
     const abs = path.isAbsolute(input) ? input : path.join(process.cwd(), input);
     const stat = await fs.stat(abs);
-    if (stat.isDirectory()) {
+    const rel = pathToPosix(path.relative(process.cwd(), abs));
+    if (shouldIgnore(ig, rel, stat.isDirectory())) {
       // eslint-disable-next-line no-console
-      console.warn(`Skipping directory: ${input}`);
+      console.warn(`Ignored by patterns: ${input}`);
       continue;
     }
-    const rel = pathToPosix(path.relative(process.cwd(), abs));
-    const meta = await computeFileMeta(abs);
+
+    if (stat.isDirectory()) {
+      const nested = await walkFiles(abs, ig, process.cwd());
+      nested.forEach((file) => filesToAdd.add(file));
+    } else if (stat.isFile()) {
+      filesToAdd.add(abs);
+    }
+  }
+
+  for (const file of filesToAdd) {
+    const rel = pathToPosix(path.relative(process.cwd(), file));
+    const meta = await computeFileMeta(file);
     index[rel] = meta;
     // eslint-disable-next-line no-console
     console.log(`added ${rel}`);
@@ -74,6 +101,17 @@ async function requireWitDir(): Promise<string> {
 
 function sameMeta(a: FileMeta, b: FileMeta): boolean {
   return a.hash === b.hash && a.size === b.size && a.mode === b.mode;
+}
+
+async function computeMetaWithCache(file: string, rel: string, index: Index): Promise<FileMeta> {
+  const stat = await fs.stat(file);
+  const mode = modeToString(stat.mode);
+  const mtime = mtimeSec(stat);
+  const indexed = index[rel];
+  if (indexed && indexed.size === stat.size && indexed.mode === mode && indexed.mtime === mtime) {
+    return indexed;
+  }
+  return computeFileMeta(file);
 }
 
 function printStatus(sections: {untracked: string[]; modified: string[]; deleted: string[]}): void {
