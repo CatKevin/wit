@@ -1,12 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCommands = registerCommands;
+const init_1 = require("./init");
 const stub_1 = require("./stub");
 function registerCommands(program) {
     program
         .command('init [name]')
         .description('Initialize a wit repository (creates .wit, config, ignores)')
-        .action((0, stub_1.makeStubAction)('init'));
+        .action(init_1.initAction);
     program
         .command('status')
         .description('Show workspace vs index status')

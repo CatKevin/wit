@@ -1,11 +1,12 @@
 import {Command} from 'commander';
+import {initAction} from './init';
 import {makeStubAction} from './stub';
 
 export function registerCommands(program: Command): void {
   program
     .command('init [name]')
     .description('Initialize a wit repository (creates .wit, config, ignores)')
-    .action(makeStubAction('init'));
+    .action(initAction);
 
   program
     .command('status')
