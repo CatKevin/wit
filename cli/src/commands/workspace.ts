@@ -53,6 +53,7 @@ export async function statusAction(): Promise<void> {
 }
 
 type AddOptions = {all?: boolean};
+type AddTarget = {abs: string; rel: string; isDir: boolean};
 
 export async function addAction(paths: string[], opts?: AddOptions): Promise<void> {
   const witPath = await requireWitDir();
@@ -60,24 +61,22 @@ export async function addAction(paths: string[], opts?: AddOptions): Promise<voi
   const index = await readIndex(indexPath);
   const ig = await buildIgnore(process.cwd());
 
-  const effectivePaths = resolveAddTargets(paths, opts);
+  const targets = await collectTargets(resolveAddTargets(paths, opts));
+  const targetRelSet = new Set(targets.map((t) => t.rel));
   const filesToAdd = new Set<string>();
 
-  for (const input of effectivePaths) {
-    const abs = path.isAbsolute(input) ? input : path.join(process.cwd(), input);
-    const stat = await fs.stat(abs);
-    const rel = pathToPosix(path.relative(process.cwd(), abs)) || '.';
-    if (shouldIgnore(ig, rel, stat.isDirectory())) {
+  for (const target of targets) {
+    if (shouldIgnore(ig, target.rel, target.isDir)) {
       // eslint-disable-next-line no-console
-      console.warn(`Ignored by patterns: ${input}`);
+      console.warn(`Ignored by patterns: ${target.rel}`);
       continue;
     }
 
-    if (stat.isDirectory()) {
-      const nested = await walkFiles(abs, ig, process.cwd());
+    if (target.isDir) {
+      const nested = await walkFiles(target.abs, ig, process.cwd());
       nested.forEach((file) => filesToAdd.add(file));
-    } else if (stat.isFile()) {
-      filesToAdd.add(abs);
+    } else {
+      filesToAdd.add(target.abs);
     }
   }
 
@@ -89,7 +88,24 @@ export async function addAction(paths: string[], opts?: AddOptions): Promise<voi
     console.log(`added ${rel}`);
   }
 
+  const deletions: string[] = [];
+  for (const rel of Object.keys(index)) {
+    if (!isWithinTargets(rel, targetRelSet)) continue;
+    const absPath = path.join(process.cwd(), rel);
+    try {
+      await fs.stat(absPath);
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') {
+        delete index[rel];
+        deletions.push(rel);
+      } else {
+        throw err;
+      }
+    }
+  }
+
   await writeIndex(indexPath, index);
+  deletions.forEach((rel) => console.log(`removed ${rel}`));
 }
 
 async function requireWitDir(): Promise<string> {
@@ -111,6 +127,26 @@ function resolveAddTargets(paths: string[], opts?: AddOptions): string[] {
     return ['.'];
   }
   return paths;
+}
+
+async function collectTargets(inputs: string[]): Promise<AddTarget[]> {
+  const targets: AddTarget[] = [];
+  for (const input of inputs) {
+    const abs = path.isAbsolute(input) ? input : path.join(process.cwd(), input);
+    const stat = await fs.stat(abs);
+    const rel = pathToPosix(path.relative(process.cwd(), abs)) || '.';
+    targets.push({abs, rel, isDir: stat.isDirectory()});
+  }
+  return targets;
+}
+
+function isWithinTargets(rel: string, targets: Set<string>): boolean {
+  if (!targets.size) return false;
+  if (targets.has('.')) return true;
+  for (const t of targets) {
+    if (rel === t || rel.startsWith(`${t}/`)) return true;
+  }
+  return false;
 }
 
 async function computeMetaWithCache(file: string, rel: string, index: Index): Promise<FileMeta> {
