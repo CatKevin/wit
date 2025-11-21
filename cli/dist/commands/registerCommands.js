@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCommands = registerCommands;
 const init_1 = require("./init");
+const commit_1 = require("./commit");
 const stub_1 = require("./stub");
 const workspace_1 = require("./workspace");
 function registerCommands(program) {
@@ -41,7 +42,7 @@ function registerCommands(program) {
         .command('commit')
         .option('-m, --message <message>', 'commit message')
         .description('Create a local commit (single-branch)')
-        .action((0, stub_1.makeStubAction)('commit'));
+        .action(commit_1.commitAction);
     program
         .command('push')
         .description('Upload manifest/quilt/commit to Walrus and update Sui head')
@@ -58,7 +59,7 @@ function registerCommands(program) {
     program
         .command('log')
         .description('Show commit history (local, single-branch)')
-        .action((0, stub_1.makeStubAction)('log'));
+        .action(commit_1.logAction);
     program
         .command('fetch')
         .description('Update remote mirror (head/manifest/commit) without changing worktree')

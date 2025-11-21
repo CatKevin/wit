@@ -1,5 +1,6 @@
 import {Command} from 'commander';
 import {initAction} from './init';
+import {commitAction, logAction} from './commit';
 import {makeStubAction} from './stub';
 import {addAction, resetAction, statusAction} from './workspace';
 
@@ -45,7 +46,7 @@ export function registerCommands(program: Command): void {
     .command('commit')
     .option('-m, --message <message>', 'commit message')
     .description('Create a local commit (single-branch)')
-    .action(makeStubAction('commit'));
+    .action(commitAction);
 
   program
     .command('push')
@@ -66,7 +67,7 @@ export function registerCommands(program: Command): void {
   program
     .command('log')
     .description('Show commit history (local, single-branch)')
-    .action(makeStubAction('log'));
+    .action(logAction);
 
   program
     .command('fetch')
