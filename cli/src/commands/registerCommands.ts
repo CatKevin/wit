@@ -1,7 +1,7 @@
 import {Command} from 'commander';
 import {initAction} from './init';
 import {makeStubAction} from './stub';
-import {addAction, statusAction} from './workspace';
+import {addAction, resetAction, statusAction} from './workspace';
 
 export function registerCommands(program: Command): void {
   program
@@ -19,6 +19,27 @@ export function registerCommands(program: Command): void {
     .option('-A, --all', 'add all changes (equivalent to add .)')
     .description('Add file(s) to the wit index')
     .action(addAction);
+
+  program
+    .command('reset [paths...]')
+    .option('-A, --all', 'unstage all entries from the wit index')
+    .description('Reset index entries for paths (like git reset -- <paths>)')
+    .action(resetAction);
+
+  program
+    .command('restore')
+    .option('--staged', 'unstage paths from the index (alias of reset)')
+    .argument('[paths...]')
+    .description('Alias: git restore --staged')
+    .action((paths: string[], opts: {staged?: boolean}) => {
+      if (!opts.staged) {
+        // eslint-disable-next-line no-console
+        console.error('Only restore --staged is supported (for unstage).');
+        process.exitCode = 1;
+        return;
+      }
+      return resetAction(paths, {all: false});
+    });
 
   program
     .command('commit')

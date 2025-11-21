@@ -54,6 +54,7 @@ export async function statusAction(): Promise<void> {
 
 type AddOptions = {all?: boolean};
 type AddTarget = {abs: string; rel: string; isDir: boolean};
+type ResetOptions = {all?: boolean};
 
 export async function addAction(paths: string[], opts?: AddOptions): Promise<void> {
   const witPath = await requireWitDir();
@@ -108,6 +109,37 @@ export async function addAction(paths: string[], opts?: AddOptions): Promise<voi
   deletions.forEach((rel) => console.log(`removed ${rel}`));
 }
 
+export async function resetAction(paths: string[], opts?: ResetOptions): Promise<void> {
+  const witPath = await requireWitDir();
+  const indexPath = path.join(witPath, 'index');
+  const index = await readIndex(indexPath);
+
+  const relTargets = resolveResetTargets(paths, opts, index);
+  if (!relTargets.length) {
+    // eslint-disable-next-line no-console
+    console.warn('Nothing to unstage (specify paths or --all)');
+    return;
+  }
+
+  const removed: string[] = [];
+  const keep: Index = {};
+  for (const [rel, meta] of Object.entries(index)) {
+    if (matchesTarget(rel, relTargets)) {
+      removed.push(rel);
+      continue;
+    }
+    keep[rel] = meta;
+  }
+
+  await writeIndex(indexPath, keep);
+  if (removed.length === 0) {
+    // eslint-disable-next-line no-console
+    console.warn('No matching paths were staged.');
+  } else {
+    removed.forEach((rel) => console.log(`unstaged ${rel}`));
+  }
+}
+
 async function requireWitDir(): Promise<string> {
   const dir = path.join(process.cwd(), WIT_DIR);
   try {
@@ -129,6 +161,15 @@ function resolveAddTargets(paths: string[], opts?: AddOptions): string[] {
   return paths;
 }
 
+function resolveResetTargets(paths: string[], opts: ResetOptions | undefined, index: Index): string[] {
+  if (opts?.all) return Object.keys(index);
+  if (!paths?.length) return [];
+  return paths.map((p) => {
+    const abs = path.isAbsolute(p) ? p : path.join(process.cwd(), p);
+    return pathToPosix(path.relative(process.cwd(), abs)) || '.';
+  });
+}
+
 async function collectTargets(inputs: string[]): Promise<AddTarget[]> {
   const targets: AddTarget[] = [];
   for (const input of inputs) {
@@ -147,6 +188,12 @@ function isWithinTargets(rel: string, targets: Set<string>): boolean {
     if (rel === t || rel.startsWith(`${t}/`)) return true;
   }
   return false;
+}
+
+function matchesTarget(rel: string, targets: string[]): boolean {
+  if (!targets.length) return false;
+  if (targets.includes('.')) return true;
+  return targets.some((t) => rel === t || rel.startsWith(`${t}/`));
 }
 
 async function computeMetaWithCache(file: string, rel: string, index: Index): Promise<FileMeta> {
