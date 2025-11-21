@@ -14,7 +14,8 @@ function registerCommands(program) {
         .description('Show workspace vs index status')
         .action(workspace_1.statusAction);
     program
-        .command('add <file...>')
+        .command('add [paths...]')
+        .option('-A, --all', 'add all changes (equivalent to add .)')
         .description('Add file(s) to the wit index')
         .action(workspace_1.addAction);
     program

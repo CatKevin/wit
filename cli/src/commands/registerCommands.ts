@@ -15,7 +15,8 @@ export function registerCommands(program: Command): void {
     .action(statusAction);
 
   program
-    .command('add <file...>')
+    .command('add [paths...]')
+    .option('-A, --all', 'add all changes (equivalent to add .)')
     .description('Add file(s) to the wit index')
     .action(addAction);
 

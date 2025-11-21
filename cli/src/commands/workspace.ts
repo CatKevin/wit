@@ -52,18 +52,21 @@ export async function statusAction(): Promise<void> {
   printStatus({untracked, modified, deleted});
 }
 
-export async function addAction(paths: string[]): Promise<void> {
+type AddOptions = {all?: boolean};
+
+export async function addAction(paths: string[], opts?: AddOptions): Promise<void> {
   const witPath = await requireWitDir();
   const indexPath = path.join(witPath, 'index');
   const index = await readIndex(indexPath);
   const ig = await buildIgnore(process.cwd());
 
+  const effectivePaths = resolveAddTargets(paths, opts);
   const filesToAdd = new Set<string>();
 
-  for (const input of paths) {
+  for (const input of effectivePaths) {
     const abs = path.isAbsolute(input) ? input : path.join(process.cwd(), input);
     const stat = await fs.stat(abs);
-    const rel = pathToPosix(path.relative(process.cwd(), abs));
+    const rel = pathToPosix(path.relative(process.cwd(), abs)) || '.';
     if (shouldIgnore(ig, rel, stat.isDirectory())) {
       // eslint-disable-next-line no-console
       console.warn(`Ignored by patterns: ${input}`);
@@ -101,6 +104,13 @@ async function requireWitDir(): Promise<string> {
 
 function sameMeta(a: FileMeta, b: FileMeta): boolean {
   return a.hash === b.hash && a.size === b.size && a.mode === b.mode;
+}
+
+function resolveAddTargets(paths: string[], opts?: AddOptions): string[] {
+  if ((opts?.all || !paths?.length) && !paths.includes('.')) {
+    return ['.'];
+  }
+  return paths;
 }
 
 async function computeMetaWithCache(file: string, rel: string, index: Index): Promise<FileMeta> {

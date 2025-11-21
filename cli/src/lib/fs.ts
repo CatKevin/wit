@@ -71,6 +71,7 @@ export async function buildIgnore(root: string, extraPatterns: string[] = []): P
 }
 
 export function shouldIgnore(ig: Ignore, relPosix: string, isDir: boolean): boolean {
+  if (relPosix === '' || relPosix === '.') return false;
   const target = isDir ? (relPosix.endsWith('/') ? relPosix : `${relPosix}/`) : relPosix;
   return ig.ignores(target);
 }
