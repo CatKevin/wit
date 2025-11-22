@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import {colors} from '../lib/ui';
+import { colors } from '../lib/ui';
 import {
   createSigner,
   checkResources,
@@ -38,16 +38,16 @@ export async function accountUseAction(address: string): Promise<void> {
     throw new Error(`Key not found for address ${target}. Generate one with "wit account generate".`);
   }
 
-  await setActiveAddress(target, {alias: match.alias, updateAuthorIfUnknown: true});
+  await setActiveAddress(target, { alias: match.alias, updateAuthorIfUnknown: true });
   await maybeUpdateRepoAuthor(target);
 
   // eslint-disable-next-line no-console
   console.log(`Switched active account to ${colors.hash(target)}${match.alias ? ` (${match.alias})` : ''}`);
 }
 
-export async function accountGenerateAction(opts: {alias?: string}): Promise<void> {
+export async function accountGenerateAction(opts: { alias?: string }): Promise<void> {
   const alias = opts.alias?.trim() || 'default';
-  const {address} = await createSigner(alias);
+  const { address } = await createSigner(alias);
   await maybeUpdateRepoAuthor(address);
   // eslint-disable-next-line no-console
   console.log(`Generated new account ${colors.hash(address)} (${alias}) and set as active.`);
@@ -58,28 +58,33 @@ export async function accountBalanceAction(addressArg?: string): Promise<void> {
   if (!target) {
     throw new Error('No address provided and no active address configured. Use `wit account generate` or `wit account use <address>` first.');
   }
-  const sui = await checkResources(target);
-  // Placeholder for WAL until WAL balance API is integrated.
-  const wal = {balance: null as bigint | null, note: 'WAL balance lookup not yet implemented'};
+  const res = await checkResources(target);
 
   // eslint-disable-next-line no-console
   console.log(colors.header(`Account ${colors.hash(target)}`));
-  if (sui.error) {
+  if (res.error) {
     // eslint-disable-next-line no-console
-    console.log(`SUI: ${colors.red('error')} ${sui.error}`);
+    console.log(`SUI: ${colors.red('error')} ${res.error}`);
   } else {
-    const badge = sui.hasMinSui === false ? colors.red('(low)') : sui.hasMinSui ? colors.green('(ok)') : colors.yellow('(unknown)');
+    const badgeSui = res.hasMinSui === false ? colors.red('(low)') : res.hasMinSui ? colors.green('(ok)') : colors.yellow('(unknown)');
     // eslint-disable-next-line no-console
-    console.log(`SUI: ${formatBalance(sui.suiBalance ?? 0n)} ${badge}`);
+    console.log(`SUI: ${formatBalance(res.suiBalance ?? 0n, 'SUI')} ${badgeSui}`);
   }
-  // eslint-disable-next-line no-console
-  console.log(`WAL: ${wal.note}`);
+
+  if (res.walError) {
+    // eslint-disable-next-line no-console
+    console.log(`WAL: ${colors.red('error')} ${res.walError}`);
+  } else {
+    const badgeWal = res.hasMinWal === false ? colors.red('(low)') : res.hasMinWal ? colors.green('(ok)') : colors.yellow('(unknown)');
+    // eslint-disable-next-line no-console
+    console.log(`WAL: ${formatBalance(res.walBalance ?? 0n, 'WAL')} ${badgeWal}`);
+  }
 }
 
-function formatBalance(amount: bigint): string {
+function formatBalance(amount: bigint, symbol: string): string {
   const whole = amount / 1_000_000_000n;
   const frac = amount % 1_000_000_000n;
-  return `${whole}.${frac.toString().padStart(9, '0')} SUI`;
+  return `${whole}.${frac.toString().padStart(9, '0')} ${symbol}`;
 }
 
 async function maybeUpdateRepoAuthor(address: string): Promise<void> {
@@ -93,7 +98,7 @@ async function maybeUpdateRepoAuthor(address: string): Promise<void> {
   }
   try {
     const raw = await fs.readFile(repoCfgPath, 'utf8');
-    const cfg = JSON.parse(raw) as {author?: string};
+    const cfg = JSON.parse(raw) as { author?: string };
     if (!cfg.author || cfg.author === 'unknown') {
       cfg.author = address;
       await fs.writeFile(repoCfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');

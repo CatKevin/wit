@@ -1,11 +1,11 @@
 import fs from 'fs/promises';
-import type {Dirent} from 'fs';
+import type { Dirent } from 'fs';
 import os from 'os';
 import path from 'path';
-import {Ed25519Keypair} from '@mysten/sui/keypairs/ed25519';
-import type {Keypair, Signer} from '@mysten/sui/cryptography';
-import {SuiClient, getFullnodeUrl} from '@mysten/sui/client';
-import {resolveWalrusConfig} from './walrus';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import type { Keypair, Signer } from '@mysten/sui/cryptography';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { resolveWalrusConfig, type ResolvedWalrusConfig } from './walrus';
 
 type GlobalConfig = {
   author?: string;
@@ -34,13 +34,23 @@ export type ResourceCheck = {
   suiBalance?: bigint;
   hasMinSui: boolean | null;
   minSui: bigint;
+  walBalance?: bigint;
+  hasMinWal: boolean | null;
+  minWal: bigint;
   error?: string;
+  walError?: string;
 };
 
 export const KEY_HOME = process.env.WIT_KEY_HOME || path.join(os.homedir(), '.wit', 'keys');
 const GLOBAL_CONFIG = path.join(os.homedir(), '.witconfig');
 const SUI_COIN = '0x2::sui::SUI';
+// WAL CoinType map (9 decimals). Default to testnet when unknown.
+const WAL_COIN_BY_NETWORK: Record<string, string> = {
+  testnet: '0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL',
+  mainnet: '0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL',
+};
 const MIN_SUI_BALANCE = 1_000_000_000n; // 1 SUI (in MIST)
+const MIN_WAL_BALANCE = 1_000_000_000n; // 1 WAL (assuming 9 decimals)
 
 export function keyPathFor(address: string): string {
   return path.join(KEY_HOME, `${normalizeAddress(address)}.key`);
@@ -51,7 +61,7 @@ export async function createSigner(alias = 'default'): Promise<LoadedSigner> {
   const address = keypair.getPublicKey().toSuiAddress();
   const file = keyPathFor(address);
 
-  await fs.mkdir(path.dirname(file), {recursive: true});
+  await fs.mkdir(path.dirname(file), { recursive: true });
   const payload: StoredKey = {
     scheme: 'ED25519',
     privateKey: keypair.getSecretKey(),
@@ -60,7 +70,7 @@ export async function createSigner(alias = 'default'): Promise<LoadedSigner> {
     createdAt: new Date().toISOString(),
     alias,
   };
-  await fs.writeFile(file, JSON.stringify(payload, null, 2) + '\n', {encoding: 'utf8', mode: 0o600});
+  await fs.writeFile(file, JSON.stringify(payload, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
 
   await upsertGlobalConfig((cfg) => ({
     ...cfg,
@@ -69,7 +79,7 @@ export async function createSigner(alias = 'default'): Promise<LoadedSigner> {
     author: cfg.author && cfg.author !== 'unknown' ? cfg.author : address,
   }));
 
-  return {signer: keypair, address, file};
+  return { signer: keypair, address, file };
 }
 
 export async function loadSigner(address?: string): Promise<LoadedSigner> {
@@ -86,32 +96,58 @@ export async function loadSigner(address?: string): Promise<LoadedSigner> {
     // eslint-disable-next-line no-console
     console.warn(`Warning: address mismatch for ${file}. Using derived address ${derived}.`);
   }
-  return {signer, address: derived, file};
+  return { signer, address: derived, file };
 }
 
 export async function checkResources(
   address: string,
-  opts?: {rpcUrl?: string; minSui?: bigint; signal?: AbortSignal},
+  opts?: { rpcUrl?: string; minSui?: bigint; minWal?: bigint; walCoin?: string; signal?: AbortSignal },
 ): Promise<ResourceCheck> {
   const minSui = opts?.minSui ?? MIN_SUI_BALANCE;
+  const minWal = opts?.minWal ?? MIN_WAL_BALANCE;
+  const resolved = await safeResolveWalrusConfig();
   let rpcUrl = opts?.rpcUrl;
   if (!rpcUrl) {
     try {
-      rpcUrl = (await resolveWalrusConfig()).suiRpcUrl;
+      rpcUrl = resolved?.suiRpcUrl;
     } catch {
       rpcUrl = getFullnodeUrl('testnet');
     }
   }
-  const client = new SuiClient({url: rpcUrl});
+  if (!rpcUrl) {
+    rpcUrl = getFullnodeUrl('testnet');
+  }
+  const client = new SuiClient({ url: rpcUrl! });
 
   try {
-    const resp = await client.getBalance({owner: address, coinType: SUI_COIN, signal: opts?.signal});
-    // API shape: resp.balance.balance (string). Guard with fallback for older fields.
-    const raw = (resp as any)?.balance?.balance ?? (resp as any)?.totalBalance ?? (resp as any)?.balance;
-    const balance = typeof raw === 'string' ? BigInt(raw) : BigInt(raw || 0);
-    return {suiBalance: balance, hasMinSui: balance >= minSui, minSui};
+    const respSui = await client.getBalance({ owner: address, coinType: SUI_COIN, signal: opts?.signal });
+    const rawSui = (respSui as any)?.balance?.balance ?? (respSui as any)?.totalBalance ?? (respSui as any)?.balance;
+    const suiBalance = typeof rawSui === 'string' ? BigInt(rawSui) : BigInt(rawSui || 0);
+
+    const walCoin = opts?.walCoin || (resolved?.network ? WAL_COIN_BY_NETWORK[resolved.network] : undefined) || WAL_COIN_BY_NETWORK.testnet;
+    let walBalance: bigint | undefined;
+    let hasMinWal: boolean | null = null;
+    let walError: string | undefined;
+    try {
+      const respWal = await client.getBalance({ owner: address, coinType: walCoin, signal: opts?.signal });
+      const rawWal = (respWal as any)?.balance?.balance ?? (respWal as any)?.totalBalance ?? (respWal as any)?.balance;
+      walBalance = typeof rawWal === 'string' ? BigInt(rawWal) : BigInt(rawWal || 0);
+      hasMinWal = walBalance >= minWal;
+    } catch (err: any) {
+      walError = err?.message || String(err);
+    }
+
+    return {
+      suiBalance,
+      hasMinSui: suiBalance >= minSui,
+      minSui,
+      walBalance,
+      hasMinWal,
+      minWal,
+      walError,
+    };
   } catch (err: any) {
-    return {hasMinSui: null, minSui, error: err?.message || String(err)};
+    return { hasMinSui: null, minSui, hasMinWal: null, minWal, error: err?.message || String(err) };
   }
 }
 
@@ -171,7 +207,7 @@ export type KeyInfo = {
 export async function listStoredKeys(): Promise<KeyInfo[]> {
   let entries: Dirent[];
   try {
-    entries = await fs.readdir(KEY_HOME, {withFileTypes: true});
+    entries = await fs.readdir(KEY_HOME, { withFileTypes: true });
   } catch (err: any) {
     if (err?.code === 'ENOENT') return [];
     throw err;
@@ -205,13 +241,21 @@ export async function readActiveAddress(): Promise<string | null> {
   return guessed ? normalizeAddress(guessed) : null;
 }
 
-export async function setActiveAddress(address: string, opts?: {alias?: string; updateAuthorIfUnknown?: boolean}): Promise<void> {
+export async function setActiveAddress(address: string, opts?: { alias?: string; updateAuthorIfUnknown?: boolean }): Promise<void> {
   await upsertGlobalConfig((cfg) => {
-    const next = {...cfg, active_address: normalizeAddress(address)};
+    const next = { ...cfg, active_address: normalizeAddress(address) };
     if (opts?.alias) next.key_alias = opts.alias;
     if (opts?.updateAuthorIfUnknown && (!cfg.author || cfg.author === 'unknown')) {
       next.author = normalizeAddress(address);
     }
     return next;
   });
+}
+
+async function safeResolveWalrusConfig(): Promise<ResolvedWalrusConfig | null> {
+  try {
+    return await resolveWalrusConfig();
+  } catch {
+    return null;
+  }
 }
