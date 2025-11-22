@@ -1,7 +1,13 @@
 import fs from 'fs/promises';
 import path from 'path';
 import {colors} from '../lib/ui';
-import {listStoredKeys, normalizeAddress, readActiveAddress, setActiveAddress} from '../lib/keys';
+import {
+  createSigner,
+  listStoredKeys,
+  normalizeAddress,
+  readActiveAddress,
+  setActiveAddress,
+} from '../lib/keys';
 
 export async function accountListAction(): Promise<void> {
   const active = await readActiveAddress();
@@ -36,6 +42,14 @@ export async function accountUseAction(address: string): Promise<void> {
 
   // eslint-disable-next-line no-console
   console.log(`Switched active account to ${colors.hash(target)}${match.alias ? ` (${match.alias})` : ''}`);
+}
+
+export async function accountGenerateAction(opts: {alias?: string}): Promise<void> {
+  const alias = opts.alias?.trim() || 'default';
+  const {address} = await createSigner(alias);
+  await maybeUpdateRepoAuthor(address);
+  // eslint-disable-next-line no-console
+  console.log(`Generated new account ${colors.hash(address)} (${alias}) and set as active.`);
 }
 
 async function maybeUpdateRepoAuthor(address: string): Promise<void> {
