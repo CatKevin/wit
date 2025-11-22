@@ -8,6 +8,9 @@ import {addAction, resetAction, statusAction} from './workspace';
 import {colorsEnabled, setColorsEnabled} from '../lib/ui';
 
 export function registerCommands(program: Command): void {
+  // Global options (propagate to subcommands)
+  program.option('--color', 'force color output').option('--no-color', 'disable color output');
+
   program
     .command('init [name]')
     .description('Initialize a wit repository (creates .wit, config, ignores)')
@@ -17,10 +20,6 @@ export function registerCommands(program: Command): void {
     .command('status')
     .description('Show workspace vs index status')
     .action(statusAction);
-
-  program
-    .option('--color', 'force color output')
-    .option('--no-color', 'disable color output');
 
   program
     .command('add [paths...]')

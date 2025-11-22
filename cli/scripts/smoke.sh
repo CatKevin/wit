@@ -8,8 +8,6 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 cd "$tmpdir"
 
-export NO_COLOR=1
-
 echo "[smoke] init"
 node "$BIN" init sample
 
@@ -25,7 +23,7 @@ node "$BIN" diff --cached
 node "$BIN" commit -m "c2"
 
 echo "[smoke] checkout c1 and verify"
-first_id="$(ls .wit/objects/commits | head -n1 | sed 's/.json$//')"
+first_id="$(ls .wit/objects/commits | /usr/bin/head -n1 | sed 's/.json$//')"
 node "$BIN" checkout "$first_id"
 grep -q "hello" a.txt
 
