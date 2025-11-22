@@ -2,7 +2,15 @@ import fs from 'fs/promises';
 import path from 'path';
 import {canonicalStringify, sha256Base64} from '../lib/serialize';
 import {pathToPosix, readIndex, Index} from '../lib/fs';
-import {CommitObject, idToFileName, readCommitById, readHeadRefPath, readRef} from '../lib/state';
+import {
+  CommitObject,
+  idToFileName,
+  readCommitById,
+  readCommitIdMap,
+  readHeadRefPath,
+  readRef,
+  writeCommitIdMap,
+} from '../lib/state';
 import {colors} from '../lib/ui';
 
 type CommitExtras = {patch_id: null; tags: Record<string, string>};
@@ -53,6 +61,7 @@ export async function commitAction(opts: CommitOptions): Promise<void> {
   const commitId = sha256Base64(serialized);
   await writeCommitObject(witPath, commitId, serialized);
   await fs.writeFile(headRefPath, `${commitId}\n`, 'utf8');
+  await updateCommitMap(witPath, commitId);
 
   // eslint-disable-next-line no-console
   console.log(colors.green(`Committed ${commitId}`));
@@ -138,4 +147,12 @@ function printCommit(id: string, commit: CommitObject): void {
   console.log(`    ${commit.message}`);
   // eslint-disable-next-line no-console
   console.log();
+}
+
+async function updateCommitMap(witPath: string, commitId: string): Promise<void> {
+  const map = await readCommitIdMap(witPath);
+  if (!map[commitId]) {
+    map[commitId] = null;
+    await writeCommitIdMap(witPath, map);
+  }
 }

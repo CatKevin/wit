@@ -46,3 +46,23 @@ export async function readCommitById(witPath: string, commitId: string): Promise
 export function idToFileName(id: string): string {
   return id.replace(/\//g, '_').replace(/\+/g, '-');
 }
+
+type CommitIdMap = Record<string, string | null>;
+const MAP_REL = path.join('objects', 'maps', 'commit_id_map.json');
+
+export async function readCommitIdMap(witPath: string): Promise<CommitIdMap> {
+  const file = path.join(witPath, MAP_REL);
+  try {
+    const raw = await fs.readFile(file, 'utf8');
+    return JSON.parse(raw) as CommitIdMap;
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return {};
+    throw err;
+  }
+}
+
+export async function writeCommitIdMap(witPath: string, map: CommitIdMap): Promise<void> {
+  const file = path.join(witPath, MAP_REL);
+  await fs.mkdir(path.dirname(file), {recursive: true});
+  await fs.writeFile(file, JSON.stringify(map, null, 2) + '\n', 'utf8');
+}
