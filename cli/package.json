@@ -11,12 +11,14 @@
     "test:smoke": "NO_COLOR=1 bash scripts/smoke.sh"
   },
   "dependencies": {
+    "@mysten/sui": "^1.45.0",
+    "@mysten/walrus": "^0.8.4",
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
     "diff": "^5.2.0",
     "ignore": "^5.3.1",
-    "isbinaryfile": "^5.0.2",
     "ink": "^4.4.1",
+    "isbinaryfile": "^5.0.2",
     "react": "^18.2.0"
   },
   "devDependencies": {
