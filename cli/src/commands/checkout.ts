@@ -18,7 +18,7 @@ export async function checkoutAction(commitId: string): Promise<void> {
   // Remove tracked files not present in target commit
   for (const rel of Object.keys(currentIndex)) {
     if (targetFiles[rel]) continue;
-    const abs = path.join(process.cwd(), rel);
+    const abs = safeJoin(process.cwd(), rel);
     await removeFileIfExists(abs);
   }
 
@@ -28,7 +28,7 @@ export async function checkoutAction(commitId: string): Promise<void> {
     if (!buf) {
       throw new Error(`Missing blob for ${rel} (${meta.hash}); cannot checkout.`);
     }
-    const abs = path.join(process.cwd(), rel);
+    const abs = safeJoin(process.cwd(), rel);
     await ensureDirForFile(abs);
     await fs.writeFile(abs, buf);
     const perm = parseInt(meta.mode, 8) & 0o777;
@@ -51,4 +51,12 @@ async function requireWitDir(): Promise<string> {
   } catch {
     throw new Error('Not a wit repository (missing .wit). Run `wit init` first.');
   }
+}
+
+function safeJoin(base: string, rel: string): string {
+  const norm = path.normalize(rel);
+  if (norm.startsWith('..') || path.isAbsolute(norm)) {
+    throw new Error(`Unsafe path detected: ${rel}`);
+  }
+  return path.join(base, norm);
 }
