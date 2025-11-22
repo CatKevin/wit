@@ -23,7 +23,10 @@ export type ResolvedWalrusConfig = {
 };
 
 const DEFAULT_NETWORK: WalrusNetwork = 'testnet';
-const DEFAULT_RELAYS = ['https://relay.walrus-testnet.mystenlabs.com'];
+const DEFAULT_RELAYS: Record<WalrusNetwork, string[]> = {
+  mainnet: ['https://upload-relay.mainnet.walrus.space'],
+  testnet: ['https://upload-relay.testnet.walrus.space'],
+};
 const DEFAULT_SUI_RPC: Record<WalrusNetwork, string> = {
   mainnet: 'https://fullnode.mainnet.sui.io:443',
   testnet: 'https://fullnode.testnet.sui.io:443',
@@ -44,20 +47,29 @@ function normalizeNetwork(network?: string): WalrusNetwork {
   return 'testnet';
 }
 
-function pickRelays(repoCfg?: WalrusConfigShape | null, globalCfg?: WalrusConfigShape | null): string[] {
+function pickRelays(
+  network: WalrusNetwork,
+  repoCfg?: WalrusConfigShape | null,
+  globalCfg?: WalrusConfigShape | null,
+): string[] {
   const fromRepo = repoCfg?.relays?.filter(Boolean) ?? [];
   if (fromRepo.length) return fromRepo;
   const fromGlobal = globalCfg?.relays?.filter(Boolean) ?? [];
   if (fromGlobal.length) return fromGlobal;
-  return DEFAULT_RELAYS;
+  return DEFAULT_RELAYS[network];
 }
 
-function pickPrimaryRelay(relays: string[], repoCfg?: WalrusConfigShape | null, globalCfg?: WalrusConfigShape | null): string {
+function pickPrimaryRelay(
+  network: WalrusNetwork,
+  relays: string[],
+  repoCfg?: WalrusConfigShape | null,
+  globalCfg?: WalrusConfigShape | null,
+): string {
   if (repoCfg?.upload_relay) return repoCfg.upload_relay;
   if (repoCfg?.uploadRelay) return repoCfg.uploadRelay;
   if (globalCfg?.upload_relay) return globalCfg.upload_relay;
   if (globalCfg?.uploadRelay) return globalCfg.uploadRelay;
-  return relays[0] || DEFAULT_RELAYS[0];
+  return relays[0] || DEFAULT_RELAYS[network][0];
 }
 
 function pickSuiRpc(network: WalrusNetwork, repoCfg?: WalrusConfigShape | null, globalCfg?: WalrusConfigShape | null): string {
@@ -77,8 +89,8 @@ export async function resolveWalrusConfig(cwd = process.cwd()): Promise<Resolved
   const globalCfg = await readJsonIfExists<WalrusConfigShape>(path.join(os.homedir(), '.witconfig'));
 
   const network = normalizeNetwork(repoCfg.network || globalCfg?.network || DEFAULT_NETWORK);
-  const relays = pickRelays(repoCfg, globalCfg);
-  const primaryRelay = pickPrimaryRelay(relays, repoCfg, globalCfg);
+  const relays = pickRelays(network, repoCfg, globalCfg);
+  const primaryRelay = pickPrimaryRelay(network, relays, repoCfg, globalCfg);
   const suiRpcUrl = pickSuiRpc(network, repoCfg, globalCfg);
 
   return {network, relays, primaryRelay, suiRpcUrl};
