@@ -8,7 +8,12 @@ import {addAction, resetAction, statusAction} from './workspace';
 import {colorsEnabled, setColorsEnabled} from '../lib/ui';
 import {accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction} from './account';
 import {pushBlobAction, pullBlobAction} from './walrusBlob';
-import {pushQuiltAction, pullQuiltAction} from './walrusQuilt';
+import {
+  pushQuiltAction,
+  pullQuiltAction,
+  pushQuiltLegacyAction,
+  pullQuiltLegacyAction,
+} from './walrusQuilt';
 
 export function registerCommands(program: Command): void {
   // Global options (propagate to subcommands)
@@ -114,6 +119,18 @@ export function registerCommands(program: Command): void {
     .command('pull-quilt <manifest_path> <out_dir>')
     .description('Download files from Walrus using manifest produced by push-quilt (hash/root_hash verified)')
     .action((manifestPath: string, outDir: string) => pullQuiltAction(manifestPath, outDir));
+
+  program
+    .command('push-quilt-legacy <dir>')
+    .description('Upload directory as legacy archive (single blob with embedded manifest)')
+    .option('--epochs <n>', 'epochs to store archive for (default 1)', (v) => parseInt(v, 10), 1)
+    .option('--deletable', 'mark archive deletable (default true)', true)
+    .action((dir: string, opts: {epochs: number; deletable?: boolean}) => pushQuiltLegacyAction(dir, opts));
+
+  program
+    .command('pull-quilt-legacy <blob_id> <out_dir>')
+    .description('Download legacy archive and restore files (hash/root_hash verified)')
+    .action((blobId: string, outDir: string) => pullQuiltLegacyAction(blobId, outDir));
 
   const account = program.command('account').description('Manage wit accounts (keys, active address)');
   account.command('list').description('List locally stored accounts (keys) and show active').action(accountListAction);

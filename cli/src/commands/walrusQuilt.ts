@@ -173,3 +173,92 @@ async function maybeLoadSigner(): Promise<{signer: any; address: string}> {
   const {loadSigner} = await import('../lib/keys.js');
   return loadSigner();
 }
+
+// Legacy fallback: archive all files into a single blob (manifest + base64 contents)
+export async function pushQuiltLegacyAction(dir: string, opts: {epochs?: number; deletable?: boolean}): Promise<void> {
+  const cwd = process.cwd();
+  const absDir = path.resolve(dir);
+  const entries = await collectFiles(absDir);
+  if (!entries.length) throw new Error(`Directory is empty: ${absDir}`);
+
+  const files: Record<
+    string,
+    {
+      data: Buffer;
+      meta: Awaited<ReturnType<typeof computeFileMeta>>;
+    }
+  > = {};
+  for (const rel of entries) {
+    const abs = path.join(absDir, rel);
+    const meta = await computeFileMeta(abs);
+    const data = await fs.readFile(abs);
+    files[pathToPosix(rel)] = {data, meta};
+  }
+
+  const manifest: Manifest = ManifestSchema.parse({
+    version: 1,
+    quilt_id: 'legacy-archive',
+    root_hash: computeRootHash(Object.fromEntries(Object.entries(files).map(([rel, info]) => [rel, info.meta]))),
+    files: Object.fromEntries(Object.entries(files).map(([rel, info]) => [rel, info.meta])),
+  });
+
+  const archive = {
+    manifest,
+    files: Object.fromEntries(Object.entries(files).map(([rel, info]) => [rel, info.data.toString('base64')])),
+  };
+
+  const payload = Buffer.from(JSON.stringify(archive));
+  const svc = await WalrusService.fromRepo(cwd);
+  const signerInfo = await maybeLoadSigner();
+  const epochs = opts.epochs && opts.epochs > 0 ? opts.epochs : 1;
+  const res = await svc.writeBlob({
+    blob: payload,
+    signer: signerInfo.signer,
+    epochs,
+    deletable: opts.deletable !== false,
+    attributes: {root_hash: manifest.root_hash, kind: 'quilt-archive'},
+  });
+
+  // eslint-disable-next-line no-console
+  console.log(colors.green(`Uploaded legacy quilt archive from ${absDir}`));
+  // eslint-disable-next-line no-console
+  console.log(`  archive blobId: ${colors.hash(res.blobId)}`);
+  // eslint-disable-next-line no-console
+  console.log(`  root_hash: ${colors.hash(manifest.root_hash)}`);
+}
+
+export async function pullQuiltLegacyAction(blobId: string, outDir: string): Promise<void> {
+  const svc = await WalrusService.fromRepo();
+  const bytes = await svc.readBlob(blobId);
+  const archive = JSON.parse(Buffer.from(bytes).toString('utf8')) as {
+    manifest: Manifest;
+    files: Record<string, string>;
+  };
+  const manifest = ManifestSchema.parse(archive.manifest);
+  const index: Record<string, {hash: string; size: number; mode: string; mtime: number}> = {};
+  for (const [rel, b64] of Object.entries(archive.files)) {
+    const data = Buffer.from(b64, 'base64');
+    const computed = {hash: sha256Base64(data), size: data.length};
+    const expected = manifest.files[rel];
+    if (!expected) throw new Error(`Manifest missing entry for ${rel}`);
+    if (expected.hash !== computed.hash || expected.size !== computed.size) throw new Error(`Hash/size mismatch for ${rel}`);
+    index[rel] = expected;
+  }
+  const computedRoot = computeRootHash(index);
+  if (computedRoot !== manifest.root_hash) {
+    throw new Error(`root_hash mismatch: manifest=${manifest.root_hash} computed=${computedRoot}`);
+  }
+  for (const [rel, b64] of Object.entries(archive.files)) {
+    const data = Buffer.from(b64, 'base64');
+    const outPath = path.join(outDir, rel);
+    await fs.mkdir(path.dirname(outPath), {recursive: true});
+    await fs.writeFile(outPath, data);
+    const meta = manifest.files[rel];
+    const mode = parseInt(meta.mode, 10);
+    if (!Number.isNaN(mode)) await fs.chmod(outPath, mode & 0o777);
+  }
+  // eslint-disable-next-line no-console
+  console.log(colors.green(`Downloaded legacy quilt archive to ${outDir}`));
+  // eslint-disable-next-line no-console
+  console.log(`  manifest root_hash: ${colors.hash(manifest.root_hash)}`);
+}
