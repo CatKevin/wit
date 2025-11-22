@@ -1,4 +1,5 @@
 import fs from 'fs/promises';
+import type {Dirent} from 'fs';
 import os from 'os';
 import path from 'path';
 import {Ed25519Keypair} from '@mysten/sui/keypairs/ed25519';
@@ -36,7 +37,7 @@ export type ResourceCheck = {
   error?: string;
 };
 
-const KEY_HOME = process.env.WIT_KEY_HOME || path.join(os.homedir(), '.wit', 'keys');
+export const KEY_HOME = process.env.WIT_KEY_HOME || path.join(os.homedir(), '.wit', 'keys');
 const GLOBAL_CONFIG = path.join(os.homedir(), '.witconfig');
 const SUI_COIN = '0x2::sui::SUI';
 const MIN_SUI_BALANCE = 1_000_000_000n; // 1 SUI (in MIST)
@@ -158,4 +159,48 @@ function guessAddress(author?: string): string | undefined {
   if (!author) return undefined;
   if (/^0x[0-9a-fA-F]+$/.test(author.trim())) return author.trim();
   return undefined;
+}
+
+export type KeyInfo = {
+  address: string;
+  alias?: string;
+  file: string;
+  createdAt?: string;
+};
+
+export async function listStoredKeys(): Promise<KeyInfo[]> {
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(KEY_HOME, {withFileTypes: true});
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return [];
+    throw err;
+  }
+
+  const keys: KeyInfo[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.key')) continue;
+    const file = path.join(KEY_HOME, entry.name);
+    try {
+      const parsed = await readKeyFile(file);
+      const derived = parsed.address || Ed25519Keypair.fromSecretKey(parsed.privateKey).getPublicKey().toSuiAddress();
+      keys.push({
+        address: normalizeAddress(derived),
+        alias: parsed.alias,
+        file,
+        createdAt: parsed.createdAt,
+      });
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.warn(`Skipping key ${file}: ${err.message}`);
+    }
+  }
+  return keys.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+}
+
+export async function readActiveAddress(): Promise<string | null> {
+  const cfg = await readGlobalConfig();
+  if (cfg.active_address) return normalizeAddress(cfg.active_address);
+  const guessed = guessAddress(cfg.author);
+  return guessed ? normalizeAddress(guessed) : null;
 }
