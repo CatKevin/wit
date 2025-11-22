@@ -156,11 +156,24 @@ export async function pullQuiltAction(manifestPath: string, outDir: string): Pro
 export async function fetchQuiltFile(manifestPath: string, identifier: string): Promise<{bytes: Uint8Array; tags: Record<string, string>}> {
   const manifestRaw = await fs.readFile(manifestPath, 'utf8');
   const manifest = ManifestSchema.parse(JSON.parse(manifestRaw));
-  const entry = manifest.files[identifier];
+  const idNormalized = pathToPosix(identifier);
+  const entry = findEntry(manifest, idNormalized);
   if (!entry || !entry.id) {
     throw new Error(`Identifier not found in manifest: ${identifier}`);
   }
-  return fetchQuiltFileById(entry.id, identifier);
+  return fetchQuiltFileById(entry.id, idNormalized);
+}
+
+function findEntry(manifest: Manifest, identifier: string) {
+  if (manifest.files[identifier]) return manifest.files[identifier];
+  // If caller passed a prefixed path (e.g., dir/a.txt) but manifest stored a.txt, try stripping leading segments.
+  const parts = identifier.split('/');
+  while (parts.length > 1) {
+    parts.shift();
+    const candidate = parts.join('/');
+    if (manifest.files[candidate]) return manifest.files[candidate];
+  }
+  return null;
 }
 
 async function collectFiles(baseDir: string): Promise<string[]> {
