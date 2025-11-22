@@ -104,15 +104,16 @@ export function registerCommands(program: Command): void {
 
   program
     .command('push-quilt <dir>')
-    .description('Upload a directory as a Walrus quilt (experimental, hash-verification TBD)')
+    .description('Upload a directory as Walrus files (tags + hash), emits local manifest')
     .option('--epochs <n>', 'epochs to store quilt for (default 1)', (v) => parseInt(v, 10), 1)
     .option('--deletable', 'mark quilt deletable (default true)', true)
-    .action((dir: string, opts: {epochs: number; deletable?: boolean}) => pushQuiltAction(dir, opts));
+    .option('--manifest-out <path>', 'where to write manifest (default ./quilt-manifest.json)')
+    .action((dir: string, opts: {epochs: number; deletable?: boolean; manifestOut?: string}) => pushQuiltAction(dir, opts));
 
   program
-    .command('pull-quilt <quilt_id> <out_dir>')
-    .description('Download a Walrus quilt (experimental)')
-    .action((quiltId: string, outDir: string) => pullQuiltAction(quiltId, outDir));
+    .command('pull-quilt <manifest_path> <out_dir>')
+    .description('Download files from Walrus using manifest produced by push-quilt (hash/root_hash verified)')
+    .action((manifestPath: string, outDir: string) => pullQuiltAction(manifestPath, outDir));
 
   const account = program.command('account').description('Manage wit accounts (keys, active address)');
   account.command('list').description('List locally stored accounts (keys) and show active').action(accountListAction);

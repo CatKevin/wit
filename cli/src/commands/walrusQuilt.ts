@@ -4,14 +4,29 @@ import {WalrusService} from '../lib/walrus';
 import {computeRootHash} from '../lib/manifest';
 import {colors} from '../lib/ui';
 import {computeFileMeta} from '../lib/fs';
-import {ManifestSchema, type Manifest} from '../lib/schema';
+import {WalrusFile} from '@mysten/walrus';
+import {canonicalStringify} from '../lib/serialize';
 
-type QuiltArchive = {
-  manifest: Manifest;
-  files: Record<string, string>; // base64 contents keyed by posix path
+type QuiltManifest = {
+  quilt_id: string;
+  root_hash: string;
+  files: Record<
+    string,
+    {
+      id: string;
+      hash: string;
+      size: number;
+      mode: string;
+      mtime: number;
+      tags: Record<string, string>;
+    }
+  >;
 };
 
-export async function pushQuiltAction(dir: string, opts: {epochs?: number; deletable?: boolean}): Promise<void> {
+export async function pushQuiltAction(
+  dir: string,
+  opts: {epochs?: number; deletable?: boolean; manifestOut?: string},
+): Promise<void> {
   const cwd = process.cwd();
   const absDir = path.resolve(dir);
   const entries = await collectFiles(absDir);
@@ -19,98 +34,131 @@ export async function pushQuiltAction(dir: string, opts: {epochs?: number; delet
     throw new Error(`Directory is empty: ${absDir}`);
   }
 
-  const files: Record<string, {data: Buffer; meta: Awaited<ReturnType<typeof computeFileMeta>>}> = {};
-  for (const rel of entries) {
-    const abs = path.join(absDir, rel);
-    const meta = await computeFileMeta(abs);
-    const data = await fs.readFile(abs);
-    files[rel] = {data, meta};
-  }
+  const files = await Promise.all(
+    entries.map(async (rel) => {
+      const abs = path.join(absDir, rel);
+      const meta = await computeFileMeta(abs);
+      const data = await fs.readFile(abs);
+      return {rel, meta, data};
+    }),
+  );
 
-  const index: Record<string, any> = {};
-  for (const [rel, info] of Object.entries(files)) {
-    index[rel] = info.meta;
-  }
-  const manifest: Manifest = ManifestSchema.parse({
-    version: 1,
-    quilt_id: 'inline',
-    root_hash: computeRootHash(index),
-    files: index,
-  });
-
-  const archive: QuiltArchive = {
-    manifest,
-    files: Object.fromEntries(Object.entries(files).map(([rel, info]) => [rel, info.data.toString('base64')])),
-  };
-  const payload = Buffer.from(JSON.stringify(archive));
+  const walrusFiles = files.map(({rel, data, meta}) =>
+    WalrusFile.from({
+      contents: data,
+      identifier: rel,
+      tags: {
+        hash: meta.hash,
+        size: String(meta.size),
+        mode: meta.mode,
+        mtime: String(meta.mtime),
+      },
+    }),
+  );
 
   const svc = await WalrusService.fromRepo(cwd);
   const signerInfo = await maybeLoadSigner();
   const epochs = opts.epochs && opts.epochs > 0 ? opts.epochs : 1;
 
-  const res = await svc.writeBlob({
-    blob: payload,
-    signer: signerInfo.signer,
-    epochs,
-    deletable: opts.deletable !== false,
-    attributes: {root_hash: manifest.root_hash, kind: 'quilt-archive'},
+  const res = await svc.getClient().writeFiles({files: walrusFiles, signer: signerInfo.signer, epochs, deletable: opts.deletable !== false});
+
+  const mapping: QuiltManifest = {
+    quilt_id: res[0]?.blobId || 'unknown',
+    root_hash: computeRootHash(
+      Object.fromEntries(files.map(({rel, meta}) => [rel, meta])),
+    ),
+    files: {},
+  };
+
+  res.forEach((entry, idx) => {
+    const {rel, meta} = files[idx];
+    mapping.files[rel] = {
+      id: entry.id,
+      hash: meta.hash,
+      size: meta.size,
+      mode: meta.mode,
+      mtime: meta.mtime,
+      tags: {
+        hash: meta.hash,
+        size: String(meta.size),
+        mode: meta.mode,
+        mtime: String(meta.mtime),
+      },
+    };
   });
 
+  const manifestPath = opts.manifestOut ? path.resolve(opts.manifestOut) : path.resolve(cwd, 'quilt-manifest.json');
+  await fs.writeFile(manifestPath, canonicalStringify(mapping), 'utf8');
+
   // eslint-disable-next-line no-console
-  console.log(colors.green(`Uploaded quilt archive from ${absDir}`));
+  console.log(colors.green(`Uploaded quilt from ${absDir}`));
   // eslint-disable-next-line no-console
-  console.log(`  quiltId: ${colors.hash(res.blobId)}`);
+  console.log(`  quiltId (blobId): ${colors.hash(mapping.quilt_id)}`);
   // eslint-disable-next-line no-console
-  console.log(`  root_hash: ${colors.hash(manifest.root_hash)}`);
+  console.log(`  manifest: ${manifestPath}`);
+  // eslint-disable-next-line no-console
+  console.log(`  root_hash: ${colors.hash(mapping.root_hash)}`);
 }
 
-export async function pullQuiltAction(quiltId: string, outDir: string): Promise<void> {
+export async function pullQuiltAction(manifestPath: string, outDir: string): Promise<void> {
+  const manifestRaw = await fs.readFile(manifestPath, 'utf8');
+  const manifest = JSON.parse(manifestRaw) as QuiltManifest;
+  if (!manifest.files || !Object.keys(manifest.files).length) {
+    throw new Error('Manifest has no files');
+  }
+
   const svc = await WalrusService.fromRepo();
-  const bytes = await svc.readBlob(quiltId);
-  const archive = JSON.parse(Buffer.from(bytes).toString('utf8')) as QuiltArchive;
-  const manifest = ManifestSchema.parse(archive.manifest);
+  const fileIds = Object.values(manifest.files).map((f) => f.id);
+  const walrusFiles = await svc.getClient().getFiles({ids: fileIds});
 
-  // Verify file hashes and root hash
-  const index: Record<string, any> = {};
-  for (const [rel, b64] of Object.entries(archive.files)) {
-    const data = Buffer.from(b64, 'base64');
-    const meta = await computeFileMetaFromBuffer(data);
-    const expected = manifest.files[rel];
+  const fetched: Record<string, Buffer> = {};
+  for (const wf of walrusFiles) {
+    const identifier = (await wf.getIdentifier()) || '';
+    const tags = await wf.getTags();
+    const content = Buffer.from(await wf.bytes());
+    const hash = await computeFileMetaFromBuffer(content);
+    const expected = manifest.files[identifier];
     if (!expected) {
-      throw new Error(`Manifest missing entry for ${rel}`);
+      throw new Error(`Manifest missing entry for ${identifier}`);
     }
-    if (expected.hash !== meta.hash) {
-      throw new Error(`Hash mismatch for ${rel}`);
+    if (expected.hash !== hash.hash || expected.size !== hash.size) {
+      throw new Error(`Hash/size mismatch for ${identifier}`);
     }
-    if (expected.size !== meta.size) {
-      throw new Error(`Size mismatch for ${rel}`);
+    // Optional: mode/mtime check
+    fetched[identifier] = content;
+    // Re-parse mode later when writing
+    if (tags.mode) {
+      expected.mode = tags.mode;
     }
-    index[rel] = expected;
-  }
-  const computedRoot = computeRootHash(index);
-  if (computedRoot !== manifest.root_hash) {
-    throw new Error(`root_hash mismatch: manifest=${manifest.root_hash} computed=${computedRoot}`);
   }
 
-  // Write files
-  for (const [rel, b64] of Object.entries(archive.files)) {
-    const data = Buffer.from(b64, 'base64');
+  const computedRoot = computeRootHash(
+    Object.fromEntries(
+      Object.entries(manifest.files).map(([rel, meta]) => [
+        rel,
+        {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+      ]),
+    ),
+  );
+  if (computedRoot !== manifest.root_hash) {
+    throw new Error(`root_hash mismatch: manifest=${manifest.root_hash}, computed=${computedRoot}`);
+  }
+
+  for (const [rel, data] of Object.entries(fetched)) {
     const outPath = path.join(outDir, rel);
     await fs.mkdir(path.dirname(outPath), {recursive: true});
     await fs.writeFile(outPath, data);
     const meta = manifest.files[rel];
-    if (meta) {
-      const mode = parseInt(meta.mode, 10);
-      if (!Number.isNaN(mode)) {
-        await fs.chmod(outPath, mode & 0o777);
-      }
+    const mode = parseInt(meta.mode, 10);
+    if (!Number.isNaN(mode)) {
+      await fs.chmod(outPath, mode & 0o777);
     }
   }
 
   // eslint-disable-next-line no-console
-  console.log(colors.green(`Downloaded quilt ${colors.hash(quiltId)} to ${outDir}`));
+  console.log(colors.green(`Downloaded quilt to ${outDir}`));
   // eslint-disable-next-line no-console
-  console.log(`  root_hash: ${colors.hash(manifest.root_hash)}`);
+  console.log(`  manifest root_hash: ${colors.hash(manifest.root_hash)}`);
 }
 
 async function collectFiles(baseDir: string): Promise<string[]> {
