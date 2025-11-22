@@ -5,7 +5,7 @@ import {colors} from '../lib/ui';
 import {computeFileMeta, pathToPosix} from '../lib/fs';
 import {computeRootHash} from '../lib/manifest';
 import {ManifestSchema, type Manifest} from '../lib/schema';
-import {canonicalStringify} from '../lib/serialize';
+import {canonicalStringify, sha256Base64} from '../lib/serialize';
 
 type PushQuiltOpts = {epochs?: number; deletable?: boolean; manifestOut?: string};
 
@@ -67,7 +67,64 @@ export async function pushQuiltAction(dir: string, opts: PushQuiltOpts): Promise
 
 // Step 2 will implement pull-quilt using Quilt index (pending)
 export async function pullQuiltAction(manifestPath: string, outDir: string): Promise<void> {
-  throw new Error('Native quilt download not implemented yet (pending Quilt index parsing). Use manifest+files mode once implemented.');
+  const manifestRaw = await fs.readFile(manifestPath, 'utf8');
+  const manifest = ManifestSchema.parse(JSON.parse(manifestRaw));
+  if (!manifest.files || !Object.keys(manifest.files).length) {
+    throw new Error('Manifest has no files');
+  }
+
+  const ids = Object.values(manifest.files).map((meta) => meta.hash.replace(/^sha256-/, ''));
+
+  const svc = await WalrusService.fromRepo();
+  const files = await svc.getClient().getFiles({ids});
+
+  const fetched: Record<string, Buffer> = {};
+  for (const wf of files) {
+    const identifier = (await wf.getIdentifier()) || '';
+    const tags = await wf.getTags();
+    const content = Buffer.from(await wf.bytes());
+    const expected = manifest.files[identifier];
+    if (!expected) {
+      throw new Error(`Manifest missing entry for ${identifier}`);
+    }
+    const computed = {hash: sha256Base64(content), size: content.length};
+    if (expected.hash !== computed.hash || expected.size !== computed.size) {
+      throw new Error(`Hash/size mismatch for ${identifier}`);
+    }
+    // Optional tags sanity
+    if (tags.hash && tags.hash !== expected.hash) {
+      throw new Error(`Tag hash mismatch for ${identifier}`);
+    }
+    fetched[identifier] = content;
+  }
+
+  const computedRoot = computeRootHash(
+    Object.fromEntries(
+      Object.entries(manifest.files).map(([rel, meta]) => [
+        rel,
+        {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+      ]),
+    ),
+  );
+  if (computedRoot !== manifest.root_hash) {
+    throw new Error(`root_hash mismatch: manifest=${manifest.root_hash}, computed=${computedRoot}`);
+  }
+
+  for (const [rel, data] of Object.entries(fetched)) {
+    const outPath = path.join(outDir, rel);
+    await fs.mkdir(path.dirname(outPath), {recursive: true});
+    await fs.writeFile(outPath, data);
+    const meta = manifest.files[rel];
+    const mode = parseInt(meta.mode, 10);
+    if (!Number.isNaN(mode)) {
+      await fs.chmod(outPath, mode & 0o777);
+    }
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(colors.green(`Downloaded quilt to ${outDir}`));
+  // eslint-disable-next-line no-console
+  console.log(`  manifest root_hash: ${colors.hash(manifest.root_hash)}`);
 }
 
 async function collectFiles(baseDir: string): Promise<string[]> {
