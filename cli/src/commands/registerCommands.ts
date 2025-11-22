@@ -5,6 +5,7 @@ import {checkoutAction} from './checkout';
 import {diffAction} from './diff';
 import {makeStubAction} from './stub';
 import {addAction, resetAction, statusAction} from './workspace';
+import {colorsEnabled, setColorsEnabled} from '../lib/ui';
 
 export function registerCommands(program: Command): void {
   program
@@ -16,6 +17,10 @@ export function registerCommands(program: Command): void {
     .command('status')
     .description('Show workspace vs index status')
     .action(statusAction);
+
+  program
+    .option('--color', 'force color output')
+    .option('--no-color', 'disable color output');
 
   program
     .command('add [paths...]')
@@ -87,4 +92,17 @@ export function registerCommands(program: Command): void {
     .command('push-blob <path>')
     .description('Upload a single blob or quilt for experimentation')
     .action(makeStubAction('push-blob'));
+
+  program.hook('preAction', (cmd) => {
+    const opts = (cmd as any).optsWithGlobals ? (cmd as any).optsWithGlobals() : program.opts();
+    const envDefault =
+      process.env.WIT_NO_COLOR === undefined &&
+      process.env.NO_COLOR === undefined &&
+      (process.env.FORCE_COLOR === undefined || process.env.FORCE_COLOR !== '0');
+    const desired = opts.color ? true : opts.noColor ? false : envDefault;
+    setColorsEnabled(desired);
+    if (!desired && colorsEnabled()) {
+      setColorsEnabled(false);
+    }
+  });
 }
