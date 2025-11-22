@@ -123,25 +123,36 @@ export async function walkFiles(
   baseDir: string = root,
   tracked?: Set<string>
 ): Promise<string[]> {
-  const entries = await fs.readdir(root, {withFileTypes: true});
-  const files: string[] = [];
+  const trackedList = tracked ? Array.from(tracked) : null;
 
-  for (const entry of entries) {
-    const full = path.join(root, entry.name);
-    const rel = path.relative(baseDir, full);
-    const relPosix = pathToPosix(rel);
-    const isDir = entry.isDirectory();
-    const hasTrackedDesc =
-      tracked && isDir ? Array.from(tracked).some((p) => p === relPosix || p.startsWith(`${relPosix}/`)) : false;
+  async function walkDir(dir: string): Promise<string[]> {
+    const entries = await fs.readdir(dir, {withFileTypes: true});
+    const files: string[] = [];
+    const dirTasks: Promise<string[]>[] = [];
 
-    if (shouldIgnore(ig, relPosix, isDir) && !(tracked?.has(relPosix) || hasTrackedDesc)) continue;
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      const rel = path.relative(baseDir, full);
+      const relPosix = pathToPosix(rel);
+      const isDir = entry.isDirectory();
+      const hasTrackedDesc =
+        trackedList && isDir ? trackedList.some((p) => p === relPosix || p.startsWith(`${relPosix}/`)) : false;
 
-    if (isDir) {
-      const nested = await walkFiles(full, ig, baseDir, tracked);
-      files.push(...nested);
-    } else if (entry.isFile()) {
-      files.push(full);
+      if (shouldIgnore(ig, relPosix, isDir) && !(tracked?.has(relPosix) || hasTrackedDesc)) continue;
+
+      if (isDir) {
+        dirTasks.push(walkDir(full));
+      } else if (entry.isFile()) {
+        files.push(full);
+      }
     }
+
+    if (dirTasks.length) {
+      const nested = await Promise.all(dirTasks);
+      nested.forEach((list) => files.push(...list));
+    }
+    return files;
   }
-  return files;
+
+  return walkDir(root);
 }
