@@ -8,6 +8,7 @@ import {addAction, resetAction, statusAction} from './workspace';
 import {colorsEnabled, setColorsEnabled} from '../lib/ui';
 import {accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction} from './account';
 import {pushBlobAction, pullBlobAction} from './walrusBlob';
+import {pushQuiltAction, pullQuiltAction} from './walrusQuilt';
 
 export function registerCommands(program: Command): void {
   // Global options (propagate to subcommands)
@@ -100,6 +101,18 @@ export function registerCommands(program: Command): void {
     .command('pull-blob <blob_id> <out_path>')
     .description('Download a Walrus blob and verify hash')
     .action((blobId: string, outPath: string) => pullBlobAction(blobId, outPath));
+
+  program
+    .command('push-quilt <dir>')
+    .description('Upload a directory as a Walrus quilt (experimental, hash-verification TBD)')
+    .option('--epochs <n>', 'epochs to store quilt for (default 1)', (v) => parseInt(v, 10), 1)
+    .option('--deletable', 'mark quilt deletable (default true)', true)
+    .action((dir: string, opts: {epochs: number; deletable?: boolean}) => pushQuiltAction(dir, opts));
+
+  program
+    .command('pull-quilt <quilt_id> <out_dir>')
+    .description('Download a Walrus quilt (experimental)')
+    .action((quiltId: string, outDir: string) => pullQuiltAction(quiltId, outDir));
 
   const account = program.command('account').description('Manage wit accounts (keys, active address)');
   account.command('list').description('List locally stored accounts (keys) and show active').action(accountListAction);

@@ -124,6 +124,17 @@ export type WriteBlobParams = {
   attributes?: Record<string, string | null>;
 };
 
+export type WriteQuiltParams = {
+  blobs: {
+    contents: Uint8Array;
+    identifier: string;
+    tags?: Record<string, string>;
+  }[];
+  signer: Signer;
+  epochs: number;
+  deletable?: boolean;
+};
+
 /**
  * Minimal Walrus client wrapper (single relay) for Stage 2 v1.
  * - Resolves config from .wit/config.json + ~/.witconfig + defaults
@@ -169,5 +180,15 @@ export class WalrusService {
   }> {
     const { blob, signer, epochs, deletable = true, owner, attributes } = params;
     return this.getClient().writeBlob({ blob, signer, epochs, deletable, owner, attributes });
+  }
+
+  async writeQuilt(params: WriteQuiltParams): Promise<{
+    quiltId: string;
+    blobId: string;
+  }> {
+    const { blobs, signer, epochs, deletable = true } = params;
+    // encodeQuilt returns {quilt, index}, but writeQuilt can take blobs directly.
+    const res = await this.getClient().writeQuilt({ blobs, signer, epochs, deletable });
+    return { quiltId: res.index.patches[0]?.patchId ?? res.blobId, blobId: res.blobId };
   }
 }
