@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import {canonicalStringify, sha256Base64} from '../lib/serialize';
-import {pathToPosix, readIndex, Index} from '../lib/fs';
+import {readIndex, Index} from '../lib/fs';
 import {
   CommitObject,
   idToFileName,
@@ -11,6 +11,7 @@ import {
   readRef,
   writeCommitIdMap,
 } from '../lib/state';
+import {computeRootHash} from '../lib/manifest';
 import {colors} from '../lib/ui';
 
 type CommitExtras = {patch_id: null; tags: Record<string, string>};
@@ -110,23 +111,6 @@ async function readConfig(witPath: string): Promise<Config> {
     }
     throw err;
   }
-}
-
-function computeRootHash(index: Index): string {
-  const entries = Object.keys(index)
-    .sort()
-    .map((rel) => {
-      const meta = index[rel];
-      return {
-        path: pathToPosix(rel),
-        hash: meta.hash,
-        size: meta.size,
-        mode: meta.mode,
-        mtime: meta.mtime,
-      };
-    });
-  const serialized = canonicalStringify(entries);
-  return sha256Base64(serialized);
 }
 
 async function writeCommitObject(witPath: string, commitId: string, serialized: string): Promise<void> {
