@@ -2,6 +2,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import {createTwoFilesPatch} from 'diff';
+import {isBinaryFile} from 'isbinaryfile';
 import {buildIgnore, computeFileMeta, pathToPosix, readBlob, readIndex, walkFiles, Index} from '../lib/fs';
 import {readCommitById, readHeadRefPath, readRef} from '../lib/state';
 import {colors} from '../lib/ui';
@@ -92,18 +93,18 @@ async function diffIndex(base: Index, target: Index, ctx: DiffContext): Promise<
     const b = target[rel];
     if (!a && b) {
       const targetBuf = await ctx.loadTarget(rel, b);
-      const binary = detectBinaryBuffer(targetBuf);
+      const binary = await isBinaryBuffers(undefined, targetBuf);
       const patch = binary ? undefined : createPatch(rel, '', targetBuf?.toString('utf8') ?? '', ctx.baseLabel, ctx.targetLabel);
       changes.push({ path: rel, kind: 'A', binary, patch });
     } else if (a && !b) {
       const baseBuf = await ctx.loadBase(rel, a);
-      const binary = detectBinaryBuffer(baseBuf);
+      const binary = await isBinaryBuffers(baseBuf, undefined);
       const patch = binary ? undefined : createPatch(rel, baseBuf?.toString('utf8') ?? '', '', ctx.baseLabel, ctx.targetLabel);
       changes.push({ path: rel, kind: 'D', binary, patch });
     } else if (a && b && !sameMeta(a, b)) {
       const baseBuf = await ctx.loadBase(rel, a);
       const targetBuf = await ctx.loadTarget(rel, b);
-      const binary = detectBinaryBuffer(baseBuf) || detectBinaryBuffer(targetBuf);
+      const binary = await isBinaryBuffers(baseBuf, targetBuf);
       const patch = binary
         ? undefined
         : createPatch(
@@ -123,11 +124,15 @@ function sameMeta(a: { hash: string; size: number; mode: string }, b: { hash: st
   return a.hash === b.hash && a.size === b.size && a.mode === b.mode;
 }
 
-function detectBinaryBuffer(buf?: Buffer | null): boolean {
-  if (!buf) return false;
-  const len = Math.min(buf.length, 4096);
-  for (let i = 0; i < len; i++) {
-    if (buf[i] === 0) return true;
+async function isBinaryBuffers(a?: Buffer | null, b?: Buffer | null): Promise<boolean> {
+  const checks: (Buffer | null | undefined)[] = [a, b];
+  for (const buf of checks) {
+    if (!buf) continue;
+    try {
+      if (await isBinaryFile(buf)) return true;
+    } catch {
+      // fallback silent; continue to next buffer
+    }
   }
   return false;
 }
