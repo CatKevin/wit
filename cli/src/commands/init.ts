@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import {readActiveAddress} from '../lib/keys';
 
 type GlobalConfig = {
   author?: string;
@@ -31,7 +32,8 @@ export async function initAction(name?: string): Promise<void> {
   await ensureLayout(witDir);
 
   const globalCfg = await readGlobalConfig();
-  const repoCfg = buildRepoConfig(repoName, globalCfg);
+  const activeAddress = await readActiveAddress();
+  const repoCfg = buildRepoConfig(repoName, globalCfg, activeAddress);
   await writeConfigIfMissing(path.join(witDir, 'config.json'), repoCfg);
 
   await ensureFile(path.join(witDir, 'HEAD'), 'refs/heads/main\n');
@@ -74,7 +76,13 @@ async function readGlobalConfig(): Promise<GlobalConfig> {
   }
 }
 
-function buildRepoConfig(repoName: string, globalCfg: GlobalConfig): RepoConfig {
+function buildRepoConfig(repoName: string, globalCfg: GlobalConfig, activeAddress?: string | null): RepoConfig {
+  const author =
+    globalCfg.author && globalCfg.author !== 'unknown'
+      ? globalCfg.author
+      : activeAddress && activeAddress.length
+        ? activeAddress
+        : 'unknown';
   return {
     repo_name: repoName,
     repo_id: null,
