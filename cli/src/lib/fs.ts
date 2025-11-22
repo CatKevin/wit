@@ -14,6 +14,7 @@ export type Index = Record<string, FileMeta>;
 
 const HASH_PREFIX = 'sha256-';
 const DEFAULT_IGNORE_PATTERNS = ['.git', '.wit', 'node_modules'];
+const BLOB_DIR = 'objects/blobs';
 
 export function pathToPosix(p: string): string {
   return p.split(path.sep).join('/');
@@ -53,6 +54,33 @@ export async function readIndex(indexPath: string): Promise<Index> {
 export async function writeIndex(indexPath: string, index: Index): Promise<void> {
   const serialized = JSON.stringify(index, null, 2) + '\n';
   await fs.writeFile(indexPath, serialized, 'utf8');
+}
+
+export function blobFileName(hash: string): string {
+  return hash.replace(/\//g, '_').replace(/\+/g, '-');
+}
+
+export async function ensureBlobFromFile(witPath: string, hash: string, filePath: string): Promise<void> {
+  const blobPath = path.join(witPath, BLOB_DIR, blobFileName(hash));
+  try {
+    await fs.access(blobPath);
+    return;
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') throw err;
+  }
+  await fs.mkdir(path.dirname(blobPath), {recursive: true});
+  const data = await fs.readFile(filePath);
+  await fs.writeFile(blobPath, data);
+}
+
+export async function readBlob(witPath: string, hash: string): Promise<Buffer | null> {
+  const blobPath = path.join(witPath, BLOB_DIR, blobFileName(hash));
+  try {
+    return await fs.readFile(blobPath);
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return null;
+    throw err;
+  }
 }
 
 export async function buildIgnore(root: string, extraPatterns: string[] = []): Promise<Ignore> {

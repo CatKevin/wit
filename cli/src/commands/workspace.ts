@@ -3,6 +3,7 @@ import path from 'path';
 import {
   buildIgnore,
   computeFileMeta,
+  ensureBlobFromFile,
   modeToString,
   mtimeSec,
   pathToPosix,
@@ -85,6 +86,7 @@ export async function addAction(paths: string[], opts?: AddOptions): Promise<voi
     const rel = pathToPosix(path.relative(process.cwd(), file));
     const meta = await computeFileMeta(file);
     index[rel] = meta;
+    await ensureBlobFromFile(witPath, meta.hash, file);
     // eslint-disable-next-line no-console
     console.log(`added ${rel}`);
   }

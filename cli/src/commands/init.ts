@@ -49,6 +49,7 @@ async function ensureLayout(witDir: string): Promise<void> {
   const subdirs = [
     'refs/heads',
     'refs/remotes',
+    'objects/blobs',
     'objects/commits',
     'objects/manifests',
     'objects/quilts',
