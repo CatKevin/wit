@@ -39,6 +39,10 @@ export async function commitAction(opts: CommitOptions): Promise<void> {
   }
 
   const config = await readConfig(witPath);
+  if (!config.author || config.author === 'unknown') {
+    // eslint-disable-next-line no-console
+    console.warn(colors.yellow('Warning: author is unknown. Set author in .wit/config.json or ~/.witconfig.'));
+  }
   const headRefPath = await readHeadRefPath(witPath);
   const parent = await readRef(headRefPath);
 
