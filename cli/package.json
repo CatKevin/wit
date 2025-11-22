@@ -7,7 +7,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test:smoke": "NO_COLOR=1 bash scripts/smoke.sh"
   },
   "dependencies": {
     "chalk": "^4.1.2",
