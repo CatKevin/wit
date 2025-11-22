@@ -1,6 +1,7 @@
 import {Command} from 'commander';
 import {initAction} from './init';
 import {commitAction, logAction} from './commit';
+import {checkoutAction} from './checkout';
 import {diffAction} from './diff';
 import {makeStubAction} from './stub';
 import {addAction, resetAction, statusAction} from './workspace';
@@ -32,15 +33,9 @@ export function registerCommands(program: Command): void {
     .command('restore')
     .option('--staged', 'unstage paths from the index (alias of reset)')
     .argument('[paths...]')
-    .description('Alias: git restore --staged')
+    .description('Restore worktree files from index or unstage when using --staged')
     .action((paths: string[], opts: {staged?: boolean}) => {
-      if (!opts.staged) {
-        // eslint-disable-next-line no-console
-        console.error('Only restore --staged is supported (for unstage).');
-        process.exitCode = 1;
-        return;
-      }
-      return resetAction(paths, {all: false});
+      return resetAction(paths, {all: opts.staged ?? false, staged: !!opts.staged});
     });
 
   program
@@ -48,6 +43,11 @@ export function registerCommands(program: Command): void {
     .option('-m, --message <message>', 'commit message')
     .description('Create a local commit (single-branch)')
     .action(commitAction);
+
+  program
+    .command('checkout <commit_id>')
+    .description('Checkout a commit snapshot to the worktree (updates index and HEAD ref)')
+    .action(checkoutAction);
 
   program
     .command('push')

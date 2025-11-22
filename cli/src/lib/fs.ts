@@ -83,6 +83,19 @@ export async function readBlob(witPath: string, hash: string): Promise<Buffer | 
   }
 }
 
+export async function ensureDirForFile(filePath: string): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), {recursive: true});
+}
+
+export async function removeFileIfExists(filePath: string): Promise<void> {
+  try {
+    await fs.unlink(filePath);
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return;
+    throw err;
+  }
+}
+
 export async function buildIgnore(root: string, extraPatterns: string[] = []): Promise<Ignore> {
   const ig = ignore();
   ig.add(DEFAULT_IGNORE_PATTERNS);

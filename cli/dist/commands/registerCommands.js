@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCommands = registerCommands;
 const init_1 = require("./init");
 const commit_1 = require("./commit");
+const checkout_1 = require("./checkout");
 const diff_1 = require("./diff");
 const stub_1 = require("./stub");
 const workspace_1 = require("./workspace");
@@ -29,21 +30,19 @@ function registerCommands(program) {
         .command('restore')
         .option('--staged', 'unstage paths from the index (alias of reset)')
         .argument('[paths...]')
-        .description('Alias: git restore --staged')
+        .description('Restore worktree files from index or unstage when using --staged')
         .action((paths, opts) => {
-        if (!opts.staged) {
-            // eslint-disable-next-line no-console
-            console.error('Only restore --staged is supported (for unstage).');
-            process.exitCode = 1;
-            return;
-        }
-        return (0, workspace_1.resetAction)(paths, { all: false });
+        return (0, workspace_1.resetAction)(paths, { all: opts.staged ?? false, staged: !!opts.staged });
     });
     program
         .command('commit')
         .option('-m, --message <message>', 'commit message')
         .description('Create a local commit (single-branch)')
         .action(commit_1.commitAction);
+    program
+        .command('checkout <commit_id>')
+        .description('Checkout a commit snapshot to the worktree (updates index and HEAD ref)')
+        .action(checkout_1.checkoutAction);
     program
         .command('push')
         .description('Upload manifest/quilt/commit to Walrus and update Sui head')

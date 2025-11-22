@@ -4,10 +4,12 @@ import {
   buildIgnore,
   computeFileMeta,
   ensureBlobFromFile,
+  ensureDirForFile,
   modeToString,
   mtimeSec,
   pathToPosix,
   readIndex,
+  readBlob,
   shouldIgnore,
   walkFiles,
   writeIndex,
@@ -55,7 +57,7 @@ export async function statusAction(): Promise<void> {
 
 type AddOptions = {all?: boolean};
 type AddTarget = {abs: string; rel: string; isDir: boolean};
-type ResetOptions = {all?: boolean};
+type ResetOptions = {all?: boolean; staged?: boolean};
 
 export async function addAction(paths: string[], opts?: AddOptions): Promise<void> {
   const witPath = await requireWitDir();
@@ -116,6 +118,10 @@ export async function resetAction(paths: string[], opts?: ResetOptions): Promise
   const indexPath = path.join(witPath, 'index');
   const index = await readIndex(indexPath);
 
+  if (opts?.staged === false) {
+    return restoreWorktree(paths, index, witPath);
+  }
+
   const relTargets = resolveResetTargets(paths, opts, index);
   if (!relTargets.length) {
     // eslint-disable-next-line no-console
@@ -170,6 +176,52 @@ function resolveResetTargets(paths: string[], opts: ResetOptions | undefined, in
     const abs = path.isAbsolute(p) ? p : path.join(process.cwd(), p);
     return pathToPosix(path.relative(process.cwd(), abs)) || '.';
   });
+}
+
+async function restoreWorktree(paths: string[], index: Index, witPath: string): Promise<void> {
+  if (!paths?.length) {
+    // eslint-disable-next-line no-console
+    console.warn('Specify paths to restore (worktree).');
+    return;
+  }
+  const targets = expandTargets(paths, index);
+  if (!targets.length) {
+    // eslint-disable-next-line no-console
+    console.warn('No matching tracked paths to restore.');
+    return;
+  }
+
+  for (const rel of targets) {
+    const meta = index[rel];
+    const buf = await readBlob(witPath, meta.hash);
+    if (!buf) {
+      // eslint-disable-next-line no-console
+      console.warn(`Missing blob for ${rel}, cannot restore.`);
+      continue;
+    }
+    const abs = path.join(process.cwd(), rel);
+    await ensureDirForFile(abs);
+    await fs.writeFile(abs, buf);
+    const perm = parseInt(meta.mode, 8) & 0o777;
+    await fs.chmod(abs, perm);
+    // eslint-disable-next-line no-console
+    console.log(`restored ${rel}`);
+  }
+}
+
+function expandTargets(inputs: string[], index: Index): string[] {
+  const result = new Set<string>();
+  const targets = inputs.map((p) => {
+    const abs = path.isAbsolute(p) ? p : path.join(process.cwd(), p);
+    return pathToPosix(path.relative(process.cwd(), abs)) || '.';
+  });
+  if (!targets.length) return [];
+  for (const rel of Object.keys(index)) {
+    if (targets.some((t) => t === '.' || rel === t || rel.startsWith(`${t}/`))) {
+      result.add(rel);
+    }
+  }
+  return Array.from(result).sort();
 }
 
 async function collectTargets(inputs: string[]): Promise<AddTarget[]> {
