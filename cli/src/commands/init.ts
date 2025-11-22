@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import {readActiveAddress} from '../lib/keys';
+import { readActiveAddress } from '../lib/keys';
 
 type GlobalConfig = {
   author?: string;
@@ -20,7 +20,7 @@ type RepoConfig = {
   created_at: string;
 };
 
-const DEFAULT_RELAYS = ['https://relay.walrus-testnet.mystenlabs.com'];
+const DEFAULT_RELAYS = ['https://upload-relay.testnet.walrus.space'];
 const DEFAULT_NETWORK = 'testnet';
 const IGNORE_ENTRIES = ['.wit/', '~/.wit/keys', '.env.local', '*.pem'];
 
@@ -28,7 +28,7 @@ export async function initAction(name?: string): Promise<void> {
   const cwd = process.cwd();
   const repoName = name || path.basename(cwd);
   const witDir = path.join(cwd, '.wit');
-  await fs.mkdir(witDir, {recursive: true});
+  await fs.mkdir(witDir, { recursive: true });
   await ensureLayout(witDir);
 
   const globalCfg = await readGlobalConfig();
@@ -58,7 +58,7 @@ async function ensureLayout(witDir: string): Promise<void> {
     'objects/maps',
     'state',
   ];
-  await Promise.all(subdirs.map((dir) => fs.mkdir(path.join(witDir, dir), {recursive: true})));
+  await Promise.all(subdirs.map((dir) => fs.mkdir(path.join(witDir, dir), { recursive: true })));
 }
 
 async function readGlobalConfig(): Promise<GlobalConfig> {

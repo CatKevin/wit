@@ -7,6 +7,7 @@ import {makeStubAction} from './stub';
 import {addAction, resetAction, statusAction} from './workspace';
 import {colorsEnabled, setColorsEnabled} from '../lib/ui';
 import {accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction} from './account';
+import {pushBlobAction, pullBlobAction} from './walrusBlob';
 
 export function registerCommands(program: Command): void {
   // Global options (propagate to subcommands)
@@ -90,8 +91,15 @@ export function registerCommands(program: Command): void {
 
   program
     .command('push-blob <path>')
-    .description('Upload a single blob or quilt for experimentation')
-    .action(makeStubAction('push-blob'));
+    .description('Upload a single blob to Walrus (hash-verified)')
+    .option('--epochs <n>', 'epochs to store blob for (default 1)', (v) => parseInt(v, 10), 1)
+    .option('--deletable', 'mark blob deletable (default true)', true)
+    .action((pathArg: string, opts: {epochs: number; deletable?: boolean}) => pushBlobAction(pathArg, opts));
+
+  program
+    .command('pull-blob <blob_id> <out_path>')
+    .description('Download a Walrus blob and verify hash')
+    .action((blobId: string, outPath: string) => pullBlobAction(blobId, outPath));
 
   const account = program.command('account').description('Manage wit accounts (keys, active address)');
   account.command('list').description('List locally stored accounts (keys) and show active').action(accountListAction);

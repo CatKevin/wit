@@ -1,8 +1,14 @@
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import {WalrusClient, type WalrusClientConfig} from '@mysten/walrus';
-import type {Signer} from '@mysten/sui/cryptography';
+import crypto from 'crypto';
+import { WalrusClient, type WalrusClientConfig } from '@mysten/walrus';
+import type { Signer } from '@mysten/sui/cryptography';
+
+// Walrus SDK expects a global crypto; Node 18+ provides crypto.webcrypto.
+if (typeof (globalThis as any).crypto === 'undefined' && crypto?.webcrypto) {
+  (globalThis as any).crypto = crypto.webcrypto as any;
+}
 
 type WalrusNetwork = 'mainnet' | 'testnet';
 
@@ -93,14 +99,19 @@ export async function resolveWalrusConfig(cwd = process.cwd()): Promise<Resolved
   const primaryRelay = pickPrimaryRelay(network, relays, repoCfg, globalCfg);
   const suiRpcUrl = pickSuiRpc(network, repoCfg, globalCfg);
 
-  return {network, relays, primaryRelay, suiRpcUrl};
+  return { network, relays, primaryRelay, suiRpcUrl };
 }
 
 function buildClientConfig(resolved: ResolvedWalrusConfig): WalrusClientConfig {
   return {
     network: resolved.network,
     suiRpcUrl: resolved.suiRpcUrl,
-    uploadRelay: {host: resolved.primaryRelay},
+    uploadRelay: {
+      host: resolved.primaryRelay,
+      // Relay requires tip headers (nonce/tx_id) even if tip is 0.
+      // We set a max tip to enable this behavior.
+      sendTip: { max: 1_000 },
+    },
   };
 }
 
@@ -121,7 +132,7 @@ export type WriteBlobParams = {
 export class WalrusService {
   private client: WalrusClient | null = null;
 
-  private constructor(private readonly config: ResolvedWalrusConfig) {}
+  private constructor(private readonly config: ResolvedWalrusConfig) { }
 
   static async fromRepo(cwd = process.cwd()): Promise<WalrusService> {
     const resolved = await resolveWalrusConfig(cwd);
@@ -140,23 +151,23 @@ export class WalrusService {
   }
 
   async readBlob(blobId: string): Promise<Uint8Array> {
-    return this.getClient().readBlob({blobId});
+    return this.getClient().readBlob({ blobId });
   }
 
   async writeBlob(params: WriteBlobParams): Promise<{
     blobId: string;
     blobObject: {
-      id: {id: string};
+      id: { id: string };
       registered_epoch: number;
       blob_id: string;
       size: string;
       encoding_type: number;
       certified_epoch: number | null;
-      storage: {id: {id: string}; start_epoch: number; end_epoch: number; storage_size: string};
+      storage: { id: { id: string }; start_epoch: number; end_epoch: number; storage_size: string };
       deletable: boolean;
     };
   }> {
-    const {blob, signer, epochs, deletable = true, owner, attributes} = params;
-    return this.getClient().writeBlob({blob, signer, epochs, deletable, owner, attributes});
+    const { blob, signer, epochs, deletable = true, owner, attributes } = params;
+    return this.getClient().writeBlob({ blob, signer, epochs, deletable, owner, attributes });
   }
 }
