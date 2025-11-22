@@ -6,6 +6,7 @@ import {computeFileMeta, pathToPosix} from '../lib/fs';
 import {computeRootHash} from '../lib/manifest';
 import {ManifestSchema, type Manifest} from '../lib/schema';
 import {canonicalStringify, sha256Base64} from '../lib/serialize';
+import {fetchQuiltFileById} from '../lib/quilt';
 import {WalrusFile} from '@mysten/walrus';
 
 type PushQuiltOpts = {epochs?: number; deletable?: boolean; manifestOut?: string};
@@ -149,6 +150,17 @@ export async function pullQuiltAction(manifestPath: string, outDir: string): Pro
   console.log(colors.green(`Downloaded quilt to ${outDir}`));
   // eslint-disable-next-line no-console
   console.log(`  manifest root_hash: ${colors.hash(manifest.root_hash)}`);
+}
+
+// On-demand fetch for a single identifier (web/explorer reuse)
+export async function fetchQuiltFile(manifestPath: string, identifier: string): Promise<{bytes: Uint8Array; tags: Record<string, string>}> {
+  const manifestRaw = await fs.readFile(manifestPath, 'utf8');
+  const manifest = ManifestSchema.parse(JSON.parse(manifestRaw));
+  const entry = manifest.files[identifier];
+  if (!entry || !entry.id) {
+    throw new Error(`Identifier not found in manifest: ${identifier}`);
+  }
+  return fetchQuiltFileById(entry.id, identifier);
 }
 
 async function collectFiles(baseDir: string): Promise<string[]> {
