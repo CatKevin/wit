@@ -3,6 +3,7 @@ import path from 'path';
 import {colors} from '../lib/ui';
 import {
   createSigner,
+  checkResources,
   listStoredKeys,
   normalizeAddress,
   readActiveAddress,
@@ -50,6 +51,35 @@ export async function accountGenerateAction(opts: {alias?: string}): Promise<voi
   await maybeUpdateRepoAuthor(address);
   // eslint-disable-next-line no-console
   console.log(`Generated new account ${colors.hash(address)} (${alias}) and set as active.`);
+}
+
+export async function accountBalanceAction(addressArg?: string): Promise<void> {
+  const target = addressArg ? normalizeAddress(addressArg) : await readActiveAddress();
+  if (!target) {
+    throw new Error('No address provided and no active address configured. Use `wit account generate` or `wit account use <address>` first.');
+  }
+  const sui = await checkResources(target);
+  // Placeholder for WAL until WAL balance API is integrated.
+  const wal = {balance: null as bigint | null, note: 'WAL balance lookup not yet implemented'};
+
+  // eslint-disable-next-line no-console
+  console.log(colors.header(`Account ${colors.hash(target)}`));
+  if (sui.error) {
+    // eslint-disable-next-line no-console
+    console.log(`SUI: ${colors.red('error')} ${sui.error}`);
+  } else {
+    const badge = sui.hasMinSui === false ? colors.red('(low)') : sui.hasMinSui ? colors.green('(ok)') : colors.yellow('(unknown)');
+    // eslint-disable-next-line no-console
+    console.log(`SUI: ${formatBalance(sui.suiBalance ?? 0n)} ${badge}`);
+  }
+  // eslint-disable-next-line no-console
+  console.log(`WAL: ${wal.note}`);
+}
+
+function formatBalance(amount: bigint): string {
+  const whole = amount / 1_000_000_000n;
+  const frac = amount % 1_000_000_000n;
+  return `${whole}.${frac.toString().padStart(9, '0')} SUI`;
 }
 
 async function maybeUpdateRepoAuthor(address: string): Promise<void> {

@@ -6,7 +6,7 @@ import {diffAction} from './diff';
 import {makeStubAction} from './stub';
 import {addAction, resetAction, statusAction} from './workspace';
 import {colorsEnabled, setColorsEnabled} from '../lib/ui';
-import {accountGenerateAction, accountListAction, accountUseAction} from './account';
+import {accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction} from './account';
 
 export function registerCommands(program: Command): void {
   // Global options (propagate to subcommands)
@@ -101,6 +101,11 @@ export function registerCommands(program: Command): void {
     .option('--alias <name>', 'alias to record in key file (defaults to "default")')
     .description('Generate a new account (keypair), set as active, and update author if unknown')
     .action(accountGenerateAction);
+  account
+    .command('balance')
+    .argument('[address]', 'Address to query (defaults to active)')
+    .description('Show SUI/WAL balance for the address (defaults to active)')
+    .action((address?: string) => accountBalanceAction(address));
 
   program.hook('preAction', (cmd) => {
     const opts = (cmd as any).optsWithGlobals ? (cmd as any).optsWithGlobals() : program.opts();
