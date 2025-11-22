@@ -6,6 +6,7 @@ import {computeFileMeta, pathToPosix} from '../lib/fs';
 import {computeRootHash} from '../lib/manifest';
 import {ManifestSchema, type Manifest} from '../lib/schema';
 import {canonicalStringify, sha256Base64} from '../lib/serialize';
+import {WalrusFile} from '@mysten/walrus';
 
 type PushQuiltOpts = {epochs?: number; deletable?: boolean; manifestOut?: string};
 
@@ -42,14 +43,32 @@ export async function pushQuiltAction(dir: string, opts: PushQuiltOpts): Promise
   const signerInfo = await maybeLoadSigner();
   const epochs = opts.epochs && opts.epochs > 0 ? opts.epochs : 1;
 
-  const res = await svc.writeQuilt({blobs: walrusBlobs, signer: signerInfo.signer, epochs, deletable: opts.deletable !== false});
-  const quiltId = res.quiltId;
+  // Native quilt upload
+  const quiltRes = await svc.writeQuilt({blobs: walrusBlobs, signer: signerInfo.signer, epochs, deletable: opts.deletable !== false});
+  const quiltId = quiltRes.quiltId;
+  // Per-file ids for pull: store via writeFiles
+  const walrusFiles = walrusBlobs.map((b) =>
+    WalrusFile.from({
+      contents: b.contents,
+      identifier: b.identifier,
+      tags: b.tags,
+    }),
+  );
+  const filesRes = await svc.getClient().writeFiles({files: walrusFiles, signer: signerInfo.signer, epochs, deletable: opts.deletable !== false});
 
   const manifest: Manifest = ManifestSchema.parse({
     version: 1,
     quilt_id: quiltId,
     root_hash: computeRootHash(Object.fromEntries(files.map(({rel, meta}) => [rel, meta]))),
-    files: Object.fromEntries(files.map(({rel, meta}) => [rel, meta])),
+    files: Object.fromEntries(
+      files.map(({rel, meta}, idx) => [
+        rel,
+        {
+          ...meta,
+          id: filesRes[idx]?.id || '',
+        },
+      ]),
+    ),
   });
 
   const manifestPath = opts.manifestOut ? path.resolve(opts.manifestOut) : path.resolve(cwd, 'quilt-manifest.json');
@@ -73,7 +92,12 @@ export async function pullQuiltAction(manifestPath: string, outDir: string): Pro
     throw new Error('Manifest has no files');
   }
 
-  const ids = Object.values(manifest.files).map((meta) => meta.hash.replace(/^sha256-/, ''));
+  const ids = Object.values(manifest.files).map((meta) => {
+    if (!meta.id) {
+      throw new Error('Manifest missing Walrus file id for entry');
+    }
+    return meta.id;
+  });
 
   const svc = await WalrusService.fromRepo();
   const files = await svc.getClient().getFiles({ids});
