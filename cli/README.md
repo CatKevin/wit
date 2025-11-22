@@ -13,7 +13,7 @@ Scaffold for the `wit` Node.js/TypeScript CLI (Commander + Ink).
   node dist/index.js init <repo-name>
   ```
   This creates `.wit/` layout, writes `config.json` with defaults (network testnet, Walrus relay testnet, author/key_alias placeholders), and ensures `.gitignore`/`.witignore` contain `.wit/` and key paths.
-- `status`, `add`, `reset`/`restore --staged`, `commit`, and `log` work: index read/write, hashing, ignore patterns, recursive add, add-all, staged deletions, unstage paths, canonical commit serialization + hashing, head ref updates, and commit history traversal.
+- `status`, `add`, `reset`/`restore --staged`, `commit`, `log`, and `diff` work: index read/write, hashing, ignore patterns, recursive add, add-all, staged deletions, unstage paths, canonical commit serialization + hashing, head ref updates, commit history traversal, and diff for worktree vs index / index vs HEAD (text vs binary flag).
 - Remaining commands are stubbed placeholders until their Stage 1 tasks are implemented.
 
 ## Current status

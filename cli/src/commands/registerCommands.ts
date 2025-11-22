@@ -1,6 +1,7 @@
 import {Command} from 'commander';
 import {initAction} from './init';
 import {commitAction, logAction} from './commit';
+import {diffAction} from './diff';
 import {makeStubAction} from './stub';
 import {addAction, resetAction, statusAction} from './workspace';
 
@@ -62,7 +63,7 @@ export function registerCommands(program: Command): void {
     .command('diff')
     .option('--cached', 'compare against index instead of worktree')
     .description('Show diffs between worktree/index/commit')
-    .action(makeStubAction('diff'));
+    .action(diffAction);
 
   program
     .command('log')

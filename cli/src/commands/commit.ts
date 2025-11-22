@@ -2,22 +2,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import {canonicalStringify, sha256Base64} from '../lib/serialize';
 import {pathToPosix, readIndex, Index} from '../lib/fs';
+import {CommitObject, idToFileName, readCommitById, readHeadRefPath, readRef} from '../lib/state';
 
 type CommitExtras = {patch_id: null; tags: Record<string, string>};
-
-type CommitObject = {
-  tree: {
-    root_hash: string;
-    manifest_id: string | null;
-    quilt_id: string | null;
-    files: Index;
-  };
-  parent: string | null;
-  author: string;
-  message: string;
-  timestamp: number;
-  extras: CommitExtras;
-};
 
 type Config = {
   author?: string;
@@ -43,7 +30,7 @@ export async function commitAction(opts: CommitOptions): Promise<void> {
   }
 
   const config = await readConfig(witPath);
-  const headRefPath = await readHeadRef(witPath);
+  const headRefPath = await readHeadRefPath(witPath);
   const parent = await readRef(headRefPath);
 
   const rootHash = computeRootHash(index);
@@ -72,7 +59,7 @@ export async function commitAction(opts: CommitOptions): Promise<void> {
 
 export async function logAction(): Promise<void> {
   const witPath = await requireWitDir();
-  const headRefPath = await readHeadRef(witPath);
+  const headRefPath = await readHeadRefPath(witPath);
   const head = await readRef(headRefPath);
   if (!head) {
     // eslint-disable-next-line no-console
@@ -111,24 +98,6 @@ async function readConfig(witPath: string): Promise<Config> {
   }
 }
 
-async function readHeadRef(witPath: string): Promise<string> {
-  const headFile = path.join(witPath, 'HEAD');
-  const raw = await fs.readFile(headFile, 'utf8');
-  const ref = raw.trim() || 'refs/heads/main';
-  return path.join(witPath, ref);
-}
-
-async function readRef(refPath: string): Promise<string | null> {
-  try {
-    const raw = await fs.readFile(refPath, 'utf8');
-    const val = raw.trim();
-    return val.length ? val : null;
-  } catch (err: any) {
-    if (err?.code === 'ENOENT') return null;
-    throw err;
-  }
-}
-
 function computeRootHash(index: Index): string {
   const entries = Object.keys(index)
     .sort()
@@ -152,13 +121,7 @@ async function writeCommitObject(witPath: string, commitId: string, serialized: 
 }
 
 async function readCommit(witPath: string, commitId: string): Promise<CommitObject> {
-  const file = path.join(witPath, 'objects', 'commits', `${idToFileName(commitId)}.json`);
-  const raw = await fs.readFile(file, 'utf8');
-  return JSON.parse(raw) as CommitObject;
-}
-
-function idToFileName(id: string): string {
-  return id.replace(/\//g, '_').replace(/\+/g, '-');
+  return readCommitById(witPath, commitId);
 }
 
 function printCommit(id: string, commit: CommitObject): void {

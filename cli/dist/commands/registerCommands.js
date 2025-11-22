@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCommands = registerCommands;
 const init_1 = require("./init");
 const commit_1 = require("./commit");
+const diff_1 = require("./diff");
 const stub_1 = require("./stub");
 const workspace_1 = require("./workspace");
 function registerCommands(program) {
@@ -55,7 +56,7 @@ function registerCommands(program) {
         .command('diff')
         .option('--cached', 'compare against index instead of worktree')
         .description('Show diffs between worktree/index/commit')
-        .action((0, stub_1.makeStubAction)('diff'));
+        .action(diff_1.diffAction);
     program
         .command('log')
         .description('Show commit history (local, single-branch)')
