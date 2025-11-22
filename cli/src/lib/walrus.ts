@@ -182,13 +182,10 @@ export class WalrusService {
     return this.getClient().writeBlob({ blob, signer, epochs, deletable, owner, attributes });
   }
 
-  async writeQuilt(params: WriteQuiltParams): Promise<{
-    quiltId: string;
-    blobId: string;
-  }> {
+  async writeQuilt(params: WriteQuiltParams): Promise<{ quiltId: string; blobId: string }> {
     const { blobs, signer, epochs, deletable = true } = params;
-    // encodeQuilt returns {quilt, index}, but writeQuilt can take blobs directly.
     const res = await this.getClient().writeQuilt({ blobs, signer, epochs, deletable });
-    return { quiltId: res.index.patches[0]?.patchId ?? res.blobId, blobId: res.blobId };
+    // Walrus returns both quilt index info and blobId; use blobId as quiltId handle.
+    return { quiltId: res.blobId, blobId: res.blobId };
   }
 }
