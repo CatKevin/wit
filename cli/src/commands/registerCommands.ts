@@ -121,6 +121,15 @@ export function registerCommands(program: Command): void {
     .action((manifestPath: string, outDir: string) => pullQuiltAction(manifestPath, outDir));
 
   program
+    .command('quilt-cat <manifest_path> <identifier>')
+    .description('Fetch a single file from a quilt (by identifier) and print to stdout')
+    .action(async (manifestPath: string, identifier: string) => {
+      const {fetchQuiltFile} = await import('./walrusQuilt.js');
+      const {bytes} = await fetchQuiltFile(manifestPath, identifier);
+      process.stdout.write(Buffer.from(bytes));
+    });
+
+  program
     .command('push-quilt-legacy <dir>')
     .description('Upload directory as legacy archive (single blob with embedded manifest)')
     .option('--epochs <n>', 'epochs to store archive for (default 1)', (v) => parseInt(v, 10), 1)
