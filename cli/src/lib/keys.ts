@@ -149,7 +149,7 @@ async function upsertGlobalConfig(mutator: (cfg: GlobalConfig) => GlobalConfig):
   await fs.writeFile(GLOBAL_CONFIG, JSON.stringify(next, null, 2) + '\n', 'utf8');
 }
 
-function normalizeAddress(addr?: string | null): string {
+export function normalizeAddress(addr?: string | null): string {
   if (!addr) return '';
   const normalized = addr.toLowerCase();
   return normalized.startsWith('0x') ? normalized : `0x${normalized}`;
@@ -203,4 +203,15 @@ export async function readActiveAddress(): Promise<string | null> {
   if (cfg.active_address) return normalizeAddress(cfg.active_address);
   const guessed = guessAddress(cfg.author);
   return guessed ? normalizeAddress(guessed) : null;
+}
+
+export async function setActiveAddress(address: string, opts?: {alias?: string; updateAuthorIfUnknown?: boolean}): Promise<void> {
+  await upsertGlobalConfig((cfg) => {
+    const next = {...cfg, active_address: normalizeAddress(address)};
+    if (opts?.alias) next.key_alias = opts.alias;
+    if (opts?.updateAuthorIfUnknown && (!cfg.author || cfg.author === 'unknown')) {
+      next.author = normalizeAddress(address);
+    }
+    return next;
+  });
 }

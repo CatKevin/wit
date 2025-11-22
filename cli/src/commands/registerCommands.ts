@@ -6,7 +6,7 @@ import {diffAction} from './diff';
 import {makeStubAction} from './stub';
 import {addAction, resetAction, statusAction} from './workspace';
 import {colorsEnabled, setColorsEnabled} from '../lib/ui';
-import {accountListAction} from './account';
+import {accountListAction, accountUseAction} from './account';
 
 export function registerCommands(program: Command): void {
   // Global options (propagate to subcommands)
@@ -95,6 +95,7 @@ export function registerCommands(program: Command): void {
 
   const account = program.command('account').description('Manage wit accounts (keys, active address)');
   account.command('list').description('List locally stored accounts (keys) and show active').action(accountListAction);
+  account.command('use <address>').description('Set active account address (updates ~/.witconfig, author if unknown)').action(accountUseAction);
 
   program.hook('preAction', (cmd) => {
     const opts = (cmd as any).optsWithGlobals ? (cmd as any).optsWithGlobals() : program.opts();
