@@ -3,6 +3,7 @@ import path from 'path';
 import {canonicalStringify, sha256Base64} from '../lib/serialize';
 import {pathToPosix, readIndex, Index} from '../lib/fs';
 import {CommitObject, idToFileName, readCommitById, readHeadRefPath, readRef} from '../lib/state';
+import {colors} from '../lib/ui';
 
 type CommitExtras = {patch_id: null; tags: Record<string, string>};
 
@@ -54,7 +55,7 @@ export async function commitAction(opts: CommitOptions): Promise<void> {
   await fs.writeFile(headRefPath, `${commitId}\n`, 'utf8');
 
   // eslint-disable-next-line no-console
-  console.log(`Committed ${commitId}`);
+  console.log(colors.green(`Committed ${commitId}`));
 }
 
 export async function logAction(): Promise<void> {
@@ -67,11 +68,11 @@ export async function logAction(): Promise<void> {
     return;
   }
 
-  let current: string | null = head;
-  while (current) {
-    const commit = await readCommit(witPath, current);
-    printCommit(current, commit);
-    current = commit.parent;
+  let currentId: string | null = head;
+  while (currentId) {
+    const commit = await readCommit(witPath, currentId);
+    printCommit(currentId, commit);
+    currentId = commit.parent;
   }
 }
 
@@ -126,11 +127,11 @@ async function readCommit(witPath: string, commitId: string): Promise<CommitObje
 
 function printCommit(id: string, commit: CommitObject): void {
   // eslint-disable-next-line no-console
-  console.log(`commit ${id}`);
+  console.log(colors.header(`commit ${colors.hash(id)}`));
   // eslint-disable-next-line no-console
-  console.log(`Author: ${commit.author}`);
+  console.log(`Author: ${colors.author(commit.author)}`);
   // eslint-disable-next-line no-console
-  console.log(`Date:   ${new Date(commit.timestamp * 1000).toISOString()}`);
+  console.log(`Date:   ${colors.date(new Date(commit.timestamp * 1000).toISOString())}`);
   // eslint-disable-next-line no-console
   console.log();
   // eslint-disable-next-line no-console

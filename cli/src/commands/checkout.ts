@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import {ensureDirForFile, readBlob, readIndex, writeIndex, Index} from '../lib/fs';
+import {ensureDirForFile, readBlob, readIndex, writeIndex, Index, removeFileIfExists} from '../lib/fs';
 import {readCommitById, readHeadRefPath} from '../lib/state';
 
 const WIT_DIR = '.wit';
@@ -50,13 +50,5 @@ async function requireWitDir(): Promise<string> {
     return dir;
   } catch {
     throw new Error('Not a wit repository (missing .wit). Run `wit init` first.');
-  }
-}
-
-async function removeFileIfExists(filePath: string): Promise<void> {
-  try {
-    await fs.unlink(filePath);
-  } catch (err: any) {
-    if (err?.code !== 'ENOENT') throw err;
   }
 }

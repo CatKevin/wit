@@ -32,7 +32,10 @@ function registerCommands(program) {
         .argument('[paths...]')
         .description('Restore worktree files from index or unstage when using --staged')
         .action((paths, opts) => {
-        return (0, workspace_1.resetAction)(paths, { all: opts.staged ?? false, staged: !!opts.staged });
+        if (opts.staged) {
+            return (0, workspace_1.resetAction)(paths, { staged: true });
+        }
+        return (0, workspace_1.resetAction)(paths, { staged: false });
     });
     program
         .command('commit')

@@ -35,7 +35,10 @@ export function registerCommands(program: Command): void {
     .argument('[paths...]')
     .description('Restore worktree files from index or unstage when using --staged')
     .action((paths: string[], opts: {staged?: boolean}) => {
-      return resetAction(paths, {all: opts.staged ?? false, staged: !!opts.staged});
+      if (opts.staged) {
+        return resetAction(paths, {staged: true});
+      }
+      return resetAction(paths, {staged: false});
     });
 
   program

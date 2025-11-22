@@ -16,6 +16,7 @@ import {
   Index,
   FileMeta,
 } from '../lib/fs';
+import {colors} from '../lib/ui';
 
 const WIT_DIR = '.wit';
 
@@ -52,7 +53,7 @@ export async function statusAction(): Promise<void> {
     }
   }
 
-  printStatus({untracked, modified, deleted});
+  printStatus({ untracked, modified, deleted });
 }
 
 type AddOptions = {all?: boolean};
@@ -90,7 +91,7 @@ export async function addAction(paths: string[], opts?: AddOptions): Promise<voi
     index[rel] = meta;
     await ensureBlobFromFile(witPath, meta.hash, file);
     // eslint-disable-next-line no-console
-    console.log(`added ${rel}`);
+    console.log(colors.added(`added ${rel}`));
   }
 
   const deletions: string[] = [];
@@ -110,7 +111,7 @@ export async function addAction(paths: string[], opts?: AddOptions): Promise<voi
   }
 
   await writeIndex(indexPath, index);
-  deletions.forEach((rel) => console.log(`removed ${rel}`));
+  deletions.forEach((rel) => console.log(colors.deleted(`removed ${rel}`)));
 }
 
 export async function resetAction(paths: string[], opts?: ResetOptions): Promise<void> {
@@ -144,7 +145,7 @@ export async function resetAction(paths: string[], opts?: ResetOptions): Promise
     // eslint-disable-next-line no-console
     console.warn('No matching paths were staged.');
   } else {
-    removed.forEach((rel) => console.log(`unstaged ${rel}`));
+    removed.forEach((rel) => console.log(colors.green(`unstaged ${rel}`)));
   }
 }
 
@@ -205,7 +206,7 @@ async function restoreWorktree(paths: string[], index: Index, witPath: string): 
     const perm = parseInt(meta.mode, 8) & 0o777;
     await fs.chmod(abs, perm);
     // eslint-disable-next-line no-console
-    console.log(`restored ${rel}`);
+    console.log(colors.green(`restored ${rel}`));
   }
 }
 
@@ -261,8 +262,8 @@ async function computeMetaWithCache(file: string, rel: string, index: Index): Pr
   return computeFileMeta(file);
 }
 
-function printStatus(sections: {untracked: string[]; modified: string[]; deleted: string[]}): void {
-  const {untracked, modified, deleted} = sections;
+function printStatus(sections: { untracked: string[]; modified: string[]; deleted: string[] }): void {
+  const { untracked, modified, deleted } = sections;
   if (!untracked.length && !modified.length && !deleted.length) {
     // eslint-disable-next-line no-console
     console.log('Nothing to commit, working tree clean.');
@@ -270,17 +271,17 @@ function printStatus(sections: {untracked: string[]; modified: string[]; deleted
   }
   if (modified.length) {
     // eslint-disable-next-line no-console
-    console.log('Modified:');
-    modified.forEach((f) => console.log(`  ${f}`));
+    console.log(colors.modified('Modified:'));
+    modified.forEach((f) => console.log(colors.modified(`  ${f}`)));
   }
   if (deleted.length) {
     // eslint-disable-next-line no-console
-    console.log('Deleted:');
-    deleted.forEach((f) => console.log(`  ${f}`));
+    console.log(colors.deleted('Deleted:'));
+    deleted.forEach((f) => console.log(colors.deleted(`  ${f}`)));
   }
   if (untracked.length) {
     // eslint-disable-next-line no-console
-    console.log('Untracked:');
-    untracked.forEach((f) => console.log(`  ${f}`));
+    console.log(colors.untracked('Untracked:'));
+    untracked.forEach((f) => console.log(colors.untracked(`  ${f}`)));
   }
 }

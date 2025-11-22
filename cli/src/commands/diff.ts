@@ -1,10 +1,12 @@
+
 import fs from 'fs/promises';
 import path from 'path';
 import {createTwoFilesPatch} from 'diff';
 import {buildIgnore, computeFileMeta, pathToPosix, readBlob, readIndex, walkFiles, Index} from '../lib/fs';
 import {readCommitById, readHeadRefPath, readRef} from '../lib/state';
+import {colors} from '../lib/ui';
 
-type DiffOptions = {cached?: boolean};
+type DiffOptions = { cached?: boolean };
 
 type Change = {
   path: string;
@@ -92,12 +94,12 @@ async function diffIndex(base: Index, target: Index, ctx: DiffContext): Promise<
       const targetBuf = await ctx.loadTarget(rel, b);
       const binary = detectBinaryBuffer(targetBuf);
       const patch = binary ? undefined : createPatch(rel, '', targetBuf?.toString('utf8') ?? '', ctx.baseLabel, ctx.targetLabel);
-      changes.push({path: rel, kind: 'A', binary, patch});
+      changes.push({ path: rel, kind: 'A', binary, patch });
     } else if (a && !b) {
       const baseBuf = await ctx.loadBase(rel, a);
       const binary = detectBinaryBuffer(baseBuf);
       const patch = binary ? undefined : createPatch(rel, baseBuf?.toString('utf8') ?? '', '', ctx.baseLabel, ctx.targetLabel);
-      changes.push({path: rel, kind: 'D', binary, patch});
+      changes.push({ path: rel, kind: 'D', binary, patch });
     } else if (a && b && !sameMeta(a, b)) {
       const baseBuf = await ctx.loadBase(rel, a);
       const targetBuf = await ctx.loadTarget(rel, b);
@@ -105,19 +107,19 @@ async function diffIndex(base: Index, target: Index, ctx: DiffContext): Promise<
       const patch = binary
         ? undefined
         : createPatch(
-            rel,
-            baseBuf?.toString('utf8') ?? '',
-            targetBuf?.toString('utf8') ?? '',
-            ctx.baseLabel,
-            ctx.targetLabel
-          );
-      changes.push({path: rel, kind: 'M', binary, patch});
+          rel,
+          baseBuf?.toString('utf8') ?? '',
+          targetBuf?.toString('utf8') ?? '',
+          ctx.baseLabel,
+          ctx.targetLabel
+        );
+      changes.push({ path: rel, kind: 'M', binary, patch });
     }
   }
   return changes;
 }
 
-function sameMeta(a: {hash: string; size: number; mode: string}, b: {hash: string; size: number; mode: string}): boolean {
+function sameMeta(a: { hash: string; size: number; mode: string }, b: { hash: string; size: number; mode: string }): boolean {
   return a.hash === b.hash && a.size === b.size && a.mode === b.mode;
 }
 
@@ -137,16 +139,29 @@ function printChanges(title: string, changes: Change[]): void {
     return;
   }
   // eslint-disable-next-line no-console
-  console.log(`# Diff (${title})`);
+  console.log(colors.header(`# Diff (${title})`));
   changes.forEach((c) => {
     const kindLabel = c.kind === 'A' ? 'Added' : c.kind === 'D' ? 'Deleted' : 'Modified';
     const binaryLabel = c.binary ? 'binary' : 'text';
+    const color = c.kind === 'A' ? colors.green : c.kind === 'D' ? colors.red : colors.yellow;
     // eslint-disable-next-line no-console
-    console.log(`${c.kind}\t[${binaryLabel}]\t${c.path}\t${kindLabel}`);
+    console.log(color(`${c.kind}\t[${binaryLabel}]\t${c.path}\t${kindLabel}`));
     if (!c.binary && c.patch) {
-      console.log(c.patch);
+      console.log(formatPatch(c.patch));
     }
   });
+}
+
+function formatPatch(patch: string): string {
+  return patch
+    .split('\n')
+    .map((line) => {
+      if (line.startsWith('+')) return colors.green(line);
+      if (line.startsWith('-')) return colors.red(line);
+      if (line.startsWith('@@')) return colors.cyan(line);
+      return line;
+    })
+    .join('\n');
 }
 
 function createPatch(rel: string, a: string, b: string, aLabel: string, bLabel: string): string {
