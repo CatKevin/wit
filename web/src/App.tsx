@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { ConnectButton } from '@mysten/dapp-kit';
 import { NetworkSelector } from '@/components/layout/NetworkSelector';
 import Home from '@/pages/Home';
+import RepoDetail from '@/pages/RepoDetail';
 
 function App() {
   return (
@@ -24,12 +25,7 @@ function App() {
         <main className="p-4 md:p-8">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/repo/:id" element={
-              <div className="container mx-auto text-center py-20">
-                <h2 className="text-2xl font-bold">Repository View</h2>
-                <p className="text-slate-500 mt-2">Coming soon...</p>
-              </div>
-            } />
+            <Route path="/repo/:id" element={<RepoDetail />} />
           </Routes>
         </main>
       </div>
