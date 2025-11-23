@@ -98,7 +98,18 @@ export async function pushAction(): Promise<void> {
     const item = chain[i];
     // eslint-disable-next-line no-console
     console.log(colors.cyan(`Uploading commit ${i + 1}/${chain.length}: ${item.id}`));
-    const uploaded = await uploadCommitSnapshot(witPath, item.id, item.commit, parentRemoteId, walrusSvc, signerInfo.signer);
+    const uploaded = await uploadCommitSnapshot(
+      witPath,
+      item.id,
+      item.commit,
+      parentRemoteId,
+      walrusSvc,
+      signerInfo.signer
+    );
+    if (!uploaded) {
+      // Upload failed with friendly message already printed
+      return;
+    }
     nextMap[item.id] = uploaded.commitId;
     parentRemoteId = uploaded.commitId;
     lastManifestId = uploaded.manifestId;
@@ -183,7 +194,7 @@ async function uploadCommitSnapshot(
   parentRemoteId: string | null,
   walrusSvc: WalrusService,
   signer: Signer
-): Promise<{manifestId: string; quiltId: string; commitId: string}> {
+): Promise<{manifestId: string; quiltId: string; commitId: string} | null> {
   // eslint-disable-next-line no-console
   console.log(colors.cyan('  Building and verifying file snapshot...'));
   const entries = Object.entries(commit.tree.files).sort((a, b) => a[0].localeCompare(b[0]));
@@ -212,12 +223,15 @@ async function uploadCommitSnapshot(
     },
   }));
 
-  const quiltRes = await walrusSvc.writeQuilt({
-    blobs: walrusBlobs,
-    signer,
-    epochs: 1,
-    deletable: true,
-  });
+  const quiltRes = await tryWithRetry(() =>
+    walrusSvc.writeQuilt({
+      blobs: walrusBlobs,
+      signer,
+      epochs: 1,
+      deletable: true,
+    })
+  );
+  if (!quiltRes) return null;
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`  Quilt uploaded: ${quiltRes.quiltId}`));
 
@@ -228,7 +242,10 @@ async function uploadCommitSnapshot(
       tags: b.tags,
     })
   );
-  const filesRes = await walrusSvc.getClient().writeFiles({files: walrusFiles, signer, epochs: 1, deletable: true});
+  const filesRes = await tryWithRetry(() =>
+    walrusSvc.getClient().writeFiles({files: walrusFiles, signer, epochs: 1, deletable: true})
+  );
+  if (!filesRes) return null;
   // eslint-disable-next-line no-console
   console.log(colors.cyan('  File index written to Walrus'));
 
@@ -289,6 +306,29 @@ async function uploadCommitSnapshot(
   await cacheJson(path.join(witPath, 'objects', 'commits', `${idToFileName(remoteCommitId)}.json`), remoteSerialized);
 
   return {manifestId, quiltId: quiltRes.quiltId, commitId: remoteCommitId};
+}
+
+async function tryWithRetry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 1200): Promise<T | null> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      // eslint-disable-next-line no-console
+      console.log(colors.yellow(`Walrus upload attempt ${i + 1}/${attempts} failed: ${err?.message || err}`));
+      if (i < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  // eslint-disable-next-line no-console
+  console.log(
+    colors.red(
+      `Walrus upload failed after ${attempts} attempts: ${lastErr?.message || lastErr}. Please check network/relay and retry (push is safe to re-run).`
+    )
+  );
+  return null;
 }
 
 async function cacheJson(filePath: string, content: string): Promise<void> {
