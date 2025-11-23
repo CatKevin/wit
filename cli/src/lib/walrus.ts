@@ -19,6 +19,7 @@ type WalrusConfigShape = {
   suiRpc?: string;
   upload_relay?: string;
   uploadRelay?: string;
+  aggregator?: string;
 };
 
 export type ResolvedWalrusConfig = {
@@ -26,12 +27,17 @@ export type ResolvedWalrusConfig = {
   relays: string[];
   primaryRelay: string;
   suiRpcUrl: string;
+  aggregatorHost: string;
 };
 
 const DEFAULT_NETWORK: WalrusNetwork = 'testnet';
 const DEFAULT_RELAYS: Record<WalrusNetwork, string[]> = {
   mainnet: ['https://upload-relay.mainnet.walrus.space'],
   testnet: ['https://upload-relay.testnet.walrus.space'],
+};
+const DEFAULT_AGGREGATORS: Record<WalrusNetwork, string> = {
+  mainnet: 'https://aggregator.walrus.space',
+  testnet: 'https://aggregator.walrus-testnet.walrus.space',
 };
 const DEFAULT_SUI_RPC: Record<WalrusNetwork, string> = {
   mainnet: 'https://fullnode.mainnet.sui.io:443',
@@ -86,6 +92,12 @@ function pickSuiRpc(network: WalrusNetwork, repoCfg?: WalrusConfigShape | null, 
   return DEFAULT_SUI_RPC[network];
 }
 
+function pickAggregatorHost(network: WalrusNetwork, repoCfg?: WalrusConfigShape | null, globalCfg?: WalrusConfigShape | null): string {
+  if (repoCfg?.aggregator) return repoCfg.aggregator;
+  if (globalCfg?.aggregator) return globalCfg.aggregator;
+  return DEFAULT_AGGREGATORS[network];
+}
+
 export async function resolveWalrusConfig(cwd = process.cwd()): Promise<ResolvedWalrusConfig> {
   const witDir = path.join(cwd, '.wit');
   const repoCfg = await readJsonIfExists<WalrusConfigShape>(path.join(witDir, 'config.json'));
@@ -98,8 +110,9 @@ export async function resolveWalrusConfig(cwd = process.cwd()): Promise<Resolved
   const relays = pickRelays(network, repoCfg, globalCfg);
   const primaryRelay = pickPrimaryRelay(network, relays, repoCfg, globalCfg);
   const suiRpcUrl = pickSuiRpc(network, repoCfg, globalCfg);
+  const aggregatorHost = pickAggregatorHost(network, repoCfg, globalCfg);
 
-  return { network, relays, primaryRelay, suiRpcUrl };
+  return { network, relays, primaryRelay, suiRpcUrl, aggregatorHost };
 }
 
 function buildClientConfig(resolved: ResolvedWalrusConfig): WalrusClientConfig {
@@ -138,7 +151,8 @@ export type WriteQuiltParams = {
 /**
  * Minimal Walrus client wrapper (single relay) for Stage 2 v1.
  * - Resolves config from .wit/config.json + ~/.witconfig + defaults
- * - Lazily constructs WalrusClient (no multi-relay/aggregator yet)
+ * - Lazily constructs WalrusClient
+ * - Uses Aggregator for reads when available (faster than direct relay)
  */
 export class WalrusService {
   private client: WalrusClient | null = null;
@@ -162,7 +176,61 @@ export class WalrusService {
   }
 
   async readBlob(blobId: string): Promise<Uint8Array> {
-    return this.getClient().readBlob({ blobId });
+    return this.readBlobFast(blobId);
+  }
+
+  /**
+   * Fast path: prefer Aggregator for reads, fallback to relay SDK
+   */
+  async readBlobFast(blobId: string): Promise<Uint8Array> {
+    if (this.config.aggregatorHost) {
+      try {
+        return await fetchBlobFromAggregator(this.config.aggregatorHost, blobId);
+      } catch (err) {
+        // fall back to relay
+      }
+    }
+    return this.getClient().readBlob({blobId});
+  }
+
+  /**
+   * Fetch multiple blobs concurrently (fast path via Aggregator).
+   */
+  async readBlobs(ids: string[], concurrency = 6): Promise<Uint8Array[]> {
+    if (!ids.length) return [];
+    if (this.config.aggregatorHost) {
+      try {
+        return await fetchMany(ids, concurrency, (id) => fetchBlobFromAggregator(this.config.aggregatorHost, id));
+      } catch {
+        // fall through to relay fetch below
+      }
+    }
+    const files = await this.getClient().getFiles({ids});
+    return Promise.all(files.map((f) => f.bytes()));
+  }
+
+  /**
+   * Read a file from a quilt using quiltId + identifier (fast path via Aggregator).
+   */
+  async readQuiltFile(quiltId: string, identifier: string): Promise<Uint8Array> {
+    if (this.config.aggregatorHost) {
+      try {
+        return await fetchQuiltFileFromAggregator(this.config.aggregatorHost, quiltId, identifier);
+      } catch {
+        // fall back to relay
+      }
+    }
+    const blob = await this.getClient().getBlob({blobId: quiltId});
+    const files = await blob.files({identifiers: [identifier]});
+    if (files.length) {
+      return files[0].bytes();
+    }
+    // last resort: treat identifier as blob id
+    const alt = await this.getClient().getFiles({ids: [identifier]});
+    if (alt.length) {
+      return alt[0].bytes();
+    }
+    throw new Error(`Identifier not found in quilt: ${identifier}`);
   }
 
   async writeBlob(params: WriteBlobParams): Promise<{
@@ -188,4 +256,46 @@ export class WalrusService {
     // Walrus returns both quilt index info and blobId; use blobId as quiltId handle.
     return { quiltId: res.blobId, blobId: res.blobId };
   }
+}
+
+async function fetchBlobFromAggregator(host: string, blobId: string): Promise<Uint8Array> {
+  const base = host.endsWith('/') ? host.slice(0, -1) : host;
+  const res = await fetch(`${base}/v1/blobs/${encodeURIComponent(blobId)}`);
+  if (!res.ok) {
+    throw new Error(`Aggregator fetch failed: ${res.status} ${res.statusText}`);
+  }
+  const buf = await res.arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+async function fetchQuiltFileFromAggregator(host: string, quiltId: string, identifier: string): Promise<Uint8Array> {
+  const base = host.endsWith('/') ? host.slice(0, -1) : host;
+  const pathId = encodeURIComponent(quiltId);
+  // identifier may contain slashes; encodeURIComponent is sufficient for path segment
+  const pathIdent = encodeURIComponent(identifier);
+  const res = await fetch(`${base}/v1/blobs/by-quilt-id/${pathId}/${pathIdent}`);
+  if (!res.ok) {
+    throw new Error(`Aggregator quilt fetch failed: ${res.status} ${res.statusText}`);
+  }
+  const buf = await res.arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+async function fetchMany<T>(
+  items: string[],
+  concurrency: number,
+  fn: (id: string) => Promise<T>,
+): Promise<T[]> {
+  const results: T[] = new Array(items.length);
+  let index = 0;
+  const workers = new Array(Math.min(concurrency, items.length)).fill(null).map(async () => {
+    while (true) {
+      const i = index;
+      if (i >= items.length) break;
+      index += 1;
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }

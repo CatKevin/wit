@@ -79,20 +79,15 @@ export async function cloneAction(repoId: string): Promise<void> {
   });
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`Downloading ${ids.length} files from quilt...`));
-  const files = await walrusSvc.getClient().getFiles({ids});
+  const files = await walrusSvc.readBlobs(ids, 8);
 
   const index: Index = {};
   for (let i = 0; i < entries.length; i += 1) {
     const [rel, meta] = entries[i];
-    const file = files[i];
-    const data = Buffer.from(await file.bytes());
-    const tags = await file.getTags();
+    const data = Buffer.from(files[i]);
     const hash = sha256Base64(data);
     if (hash !== meta.hash || data.length !== meta.size) {
       throw new Error(`Hash/size mismatch for ${rel}`);
-    }
-    if (tags?.hash && tags.hash !== meta.hash) {
-      throw new Error(`Tag hash mismatch for ${rel}`);
     }
     const abs = path.join(process.cwd(), rel);
     await ensureDirForFile(abs);

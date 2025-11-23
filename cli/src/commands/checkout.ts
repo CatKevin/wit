@@ -142,11 +142,10 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any): Promise<
   const walrusSvc = await WalrusService.fromRepo();
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`Fetching ${ids.length} missing blobs from Walrus...`));
-  const files = await walrusSvc.getClient().getFiles({ids});
+  const files = await walrusSvc.readBlobs(ids, 8);
   for (let i = 0; i < missing.length; i += 1) {
     const {rel, meta} = missing[i];
-    const file = files[i];
-    const data = Buffer.from(await file.bytes());
+    const data = Buffer.from(files[i]);
     const hash = sha256Base64(data);
     if (hash !== meta.hash || data.length !== meta.size) {
       throw new Error(`Downloaded blob mismatch for ${rel}`);

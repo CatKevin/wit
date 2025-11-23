@@ -93,7 +93,8 @@ export async function pullQuiltAction(manifestPath: string, outDir: string): Pro
     throw new Error('Manifest has no files');
   }
 
-  const ids = Object.values(manifest.files).map((meta) => {
+  const entries = Object.entries(manifest.files);
+  const ids = entries.map(([, meta]) => {
     if (!meta.id) {
       throw new Error('Manifest missing Walrus file id for entry');
     }
@@ -101,24 +102,15 @@ export async function pullQuiltAction(manifestPath: string, outDir: string): Pro
   });
 
   const svc = await WalrusService.fromRepo();
-  const files = await svc.getClient().getFiles({ids});
+  const files = await svc.readBlobs(ids, 8);
 
   const fetched: Record<string, Buffer> = {};
-  for (const wf of files) {
-    const identifier = (await wf.getIdentifier()) || '';
-    const tags = await wf.getTags();
-    const content = Buffer.from(await wf.bytes());
-    const expected = manifest.files[identifier];
-    if (!expected) {
-      throw new Error(`Manifest missing entry for ${identifier}`);
-    }
+  for (let i = 0; i < entries.length; i += 1) {
+    const [identifier, expected] = entries[i];
+    const content = Buffer.from(files[i]);
     const computed = {hash: sha256Base64(content), size: content.length};
     if (expected.hash !== computed.hash || expected.size !== computed.size) {
       throw new Error(`Hash/size mismatch for ${identifier}`);
-    }
-    // Optional tags sanity
-    if (tags.hash && tags.hash !== expected.hash) {
-      throw new Error(`Tag hash mismatch for ${identifier}`);
     }
     fetched[identifier] = content;
   }

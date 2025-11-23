@@ -78,6 +78,11 @@ export async function logAction(): Promise<void> {
   const headRefPath = await readHeadRefPath(witPath);
   const head = await readRef(headRefPath);
   const remoteHead = await readRemoteRef(witPath);
+  const commitMap = await readCommitIdMap(witPath);
+
+  // If the local HEAD has already been pushed and maps to remoteHead, treat it as the same commit.
+  const headRemoteMapped = head ? commitMap[head] : null;
+  const remoteAligned = head && remoteHead && headRemoteMapped === remoteHead;
 
   const seen = new Set<string>();
   if (head) {
@@ -90,12 +95,16 @@ export async function logAction(): Promise<void> {
       seen.add(currentId);
       currentId = commit.parent;
     }
+    if (remoteAligned) {
+      // eslint-disable-next-line no-console
+      console.log(colors.gray(`(remote id: ${colors.hash(remoteHead!)})`));
+    }
   } else {
     // eslint-disable-next-line no-console
     console.log('No local commits yet.');
   }
 
-  if (remoteHead && (!head || remoteHead !== head)) {
+  if (remoteHead && (!head || remoteHead !== head) && !remoteAligned) {
     // eslint-disable-next-line no-console
     console.log(colors.header('Remote (remotes/main):'));
     let currentId: string | null = remoteHead;
