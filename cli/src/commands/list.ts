@@ -52,6 +52,9 @@ export async function listAction(options: { owned?: boolean; collaborated?: bool
       const createdEvents = await fetchEvents({
         Sender: address,
       });
+      const ownershipEvents = await fetchEvents({
+        MoveEventType: `${WIT_PACKAGE_ID}::${WIT_MODULE_NAME}::OwnershipTransferredEvent`,
+      });
 
       for (const event of createdEvents) {
         if (event.type === `${WIT_PACKAGE_ID}::${WIT_MODULE_NAME}::RepositoryCreatedEvent`) {
@@ -59,6 +62,21 @@ export async function listAction(options: { owned?: boolean; collaborated?: bool
           repos.set(parsed.repo_id, {
             id: parsed.repo_id,
             name: decodeVecAsString(parsed.name) || 'Unknown',
+            role: 'Owner',
+          });
+        }
+      }
+      for (const event of ownershipEvents) {
+        const parsed = event.parsedJson as any;
+        if (parsed.new_owner !== address) continue;
+        const repoId = parsed.repo_id as string;
+        const existing = repos.get(repoId);
+        if (existing) {
+          existing.role = 'Owner';
+        } else {
+          repos.set(repoId, {
+            id: repoId,
+            name: 'Loading...',
             role: 'Owner',
           });
         }
