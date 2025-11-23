@@ -156,6 +156,46 @@ export async function listAction(options: { owned?: boolean; collaborated?: bool
     }
   }
 
+  // 4. Re-evaluate roles against current on-chain state (handles ownership transfer/removal)
+  const allRepoIds = Array.from(repos.keys());
+  if (allRepoIds.length) {
+    const chunkSize = 50;
+    for (let i = 0; i < allRepoIds.length; i += chunkSize) {
+      const chunk = allRepoIds.slice(i, i + chunkSize);
+      try {
+        const objects = await client.multiGetObjects({
+          ids: chunk,
+          options: {showContent: true},
+        });
+        for (const obj of objects) {
+          const rec = repos.get(obj.data?.objectId || '');
+          if (!rec) continue;
+          if (obj.data?.content?.dataType !== 'moveObject') {
+            repos.delete(rec.id);
+            continue;
+          }
+          const fields = obj.data.content.fields as any;
+          const owner = fields.owner as string;
+          const collaborators = (fields.collaborators as string[]) || [];
+          const isOwner = owner === address;
+          const isCollab = collaborators.includes(address);
+          if (isOwner) {
+            rec.role = 'Owner';
+          } else if (isCollab) {
+            rec.role = 'Collaborator';
+          } else {
+            repos.delete(rec.id);
+          }
+          if ((!rec.name || rec.name === 'Loading...') && fields.name) {
+            rec.name = decodeVecAsString(fields.name) || rec.name;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to reconcile roles from objects:', e);
+      }
+    }
+  }
+
   if (repos.size === 0) {
     console.log('No repositories found.');
     return;
