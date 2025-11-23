@@ -157,6 +157,7 @@ function FileChangeCard({ change, isExpanded, onToggle, quiltId }: FileChangeCar
                         isLoading={isLoading}
                         error={error}
                         isBinary={isBinary}
+                        changeType={change.type}
                     />
                 </div>
             )}

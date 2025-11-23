@@ -8,6 +8,7 @@ interface DiffViewerProps {
     isLoading?: boolean;
     error?: Error | null;
     isBinary?: boolean;
+    changeType?: 'added' | 'modified' | 'deleted'; // Optional: to optimize display
 }
 
 /**
@@ -19,7 +20,13 @@ interface DiffViewerProps {
  * - White background for context lines
  * - Line numbers on both sides
  */
-export function DiffViewer({ lineDiff, fileName, isLoading, error, isBinary }: DiffViewerProps) {
+export function DiffViewer({ lineDiff, fileName, isLoading, error, isBinary, changeType }: DiffViewerProps) {
+    // Determine if we need both line number columns
+    // For 'added' files: only show new line numbers
+    // For 'deleted' files: only show old line numbers
+    // For 'modified' files or auto-detect: show both
+    const showOldLineNumbers = changeType !== 'added';
+    const showNewLineNumbers = changeType !== 'deleted';
     if (isLoading) {
         return (
             <Card>
@@ -104,15 +111,19 @@ export function DiffViewer({ lineDiff, fileName, isLoading, error, isBinary }: D
 
                                 return (
                                     <tr key={index} className={`${bgColor} hover:bg-opacity-80 transition-colors`}>
-                                        {/* Old line number */}
-                                        <td className="w-12 px-2 py-0.5 text-right text-slate-400 select-none border-r border-slate-200">
-                                            {line.oldLineNumber || ''}
-                                        </td>
+                                        {/* Old line number - only show if needed */}
+                                        {showOldLineNumbers && (
+                                            <td className="w-12 px-2 py-0.5 text-right text-slate-400 select-none border-r border-slate-200">
+                                                {line.oldLineNumber || ''}
+                                            </td>
+                                        )}
 
-                                        {/* New line number */}
-                                        <td className="w-12 px-2 py-0.5 text-right text-slate-400 select-none border-r border-slate-200">
-                                            {line.newLineNumber || ''}
-                                        </td>
+                                        {/* New line number - only show if needed */}
+                                        {showNewLineNumbers && (
+                                            <td className="w-12 px-2 py-0.5 text-right text-slate-400 select-none border-r border-slate-200">
+                                                {line.newLineNumber || ''}
+                                            </td>
+                                        )}
 
                                         {/* Prefix (+/-/ ) */}
                                         <td className={`w-6 px-1 py-0.5 text-center select-none ${textColor} font-bold`}>

@@ -12,9 +12,6 @@ export default function CommitDetailPage() {
     const { repoId, commitId } = useParams<{ repoId: string; commitId: string }>();
     const { diff, isLoading, error } = useCommitDiff(commitId);
 
-    // Debug logging
-    console.log('CommitDetailPage:', { commitId, diff, isLoading, error });
-
     if (isLoading) {
         return (
             <div className="container mx-auto max-w-6xl">
@@ -27,7 +24,6 @@ export default function CommitDetailPage() {
     }
 
     if (error || !diff) {
-        console.error('CommitDetailPage error:', { error, diff, isLoading });
         return (
             <div className="container mx-auto max-w-6xl">
                 <div className="flex flex-col items-center justify-center min-h-[50vh] text-red-500">
@@ -35,7 +31,6 @@ export default function CommitDetailPage() {
                     <h2 className="text-xl font-bold">Failed to load commit</h2>
                     <p className="text-slate-600 mt-2">ID: {commitId}</p>
                     {error && <p className="text-sm text-slate-500 mt-1">{String(error)}</p>}
-                    {!diff && !error && <p className="text-sm text-slate-500 mt-1">Diff is null but no error reported</p>}
                     <Button variant="outline" className="mt-6" asChild>
                         <Link to={`/repo/${repoId}`}>Back to Repository</Link>
                     </Button>

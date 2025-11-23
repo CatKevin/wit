@@ -33,35 +33,9 @@ export function useCommitDiff(commitId?: string) {
     const enrichedParent = enrichParentResult.data;
     const enrichedParentLoading = enrichParentResult.isLoading;
 
-    // Debug logging
-    console.log('useCommitDiff:', {
-        commitId,
-        commit,
-        commitLoading,
-        commitError,
-        enrichCurrentResult,
-        enrichedCommit,
-        enrichedCommitLoading,
-        parentId,
-        parentCommit,
-        parentLoading,
-        enrichParentResult,
-        enrichedParent,
-        enrichedParentLoading,
-    });
-
     // Compute file-level diff
     const diff: CommitDiff | null = useMemo(() => {
-        // Wait until enrichedCommit is fully loaded with tree.files
-        console.log('useMemo diff calculation:', {
-            enrichedCommit,
-            hasCommit: !!enrichedCommit?.commit,
-            hasTree: !!enrichedCommit?.commit?.tree,
-            treeStructure: enrichedCommit?.commit?.tree,
-        });
-
         if (!enrichedCommit?.commit?.tree) {
-            console.warn('Diff calculation aborted: missing commit.tree');
             return null;
         }
 

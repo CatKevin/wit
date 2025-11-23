@@ -15,24 +15,11 @@ export function useCommitWithManifest(commitWithId?: CommitWithId | any): {
     // Handle case where input might not be CommitWithId format
     const manifestId = commitWithId?.commit?.tree?.manifest_id;
 
-    const { data: manifest, isLoading: manifestLoading, error: manifestError } = useQuery({
+    const { data: manifest, isLoading: manifestLoading } = useQuery({
         queryKey: ['manifest', manifestId],
         queryFn: () => getManifest(manifestId!),
         enabled: !!manifestId && !commitWithId?.commit?.tree?.files,
         staleTime: 5 * 60 * 1000, // 5 minutes
-    });
-
-    // Debug logging
-    console.log('useCommitWithManifest:', {
-        commitWithId,
-        commitWithIdType: typeof commitWithId,
-        hasCommitProp: commitWithId && 'commit' in commitWithId,
-        commitWithIdKeys: commitWithId ? Object.keys(commitWithId) : null,
-        manifestId,
-        manifest,
-        manifestLoading,
-        manifestError,
-        hasFiles: !!commitWithId?.commit?.tree?.files,
     });
 
     if (!commitWithId) return { data: null, isLoading: false };
