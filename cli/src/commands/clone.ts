@@ -155,25 +155,8 @@ async function ensureLayout(cwd: string, repoId: string): Promise<string> {
     }
   }
 
-  await ensureIgnore(path.join(cwd, '.gitignore'));
-  await ensureIgnore(path.join(cwd, '.witignore'));
   await fs.writeFile(path.join(witPath, 'HEAD'), 'refs/heads/main\n', 'utf8');
   return witPath;
-}
-
-async function ensureIgnore(file: string): Promise<void> {
-  const entries = ['.wit/', '~/.wit/keys', '.env.local', '*.pem'];
-  let existing: string[] = [];
-  try {
-    const raw = await fs.readFile(file, 'utf8');
-    existing = raw.split(/\r?\n/).filter((l) => l.trim().length);
-  } catch (err: any) {
-    if (err?.code !== 'ENOENT') throw err;
-  }
-  for (const e of entries) {
-    if (!existing.includes(e)) existing.push(e);
-  }
-  await fs.writeFile(file, existing.join('\n') + '\n', 'utf8');
 }
 
 async function ensureHeadFiles(witPath: string, headCommit: string): Promise<void> {
