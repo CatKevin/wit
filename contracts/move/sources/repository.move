@@ -72,10 +72,35 @@ module wit_repository::repository {
         new_owner: address,
     }
 
+    /// Event emitted when the seal policy is updated.
+    public struct SealPolicyUpdatedEvent has copy, drop {
+        repo_id: address,
+        new_policy_id: Option<vector<u8>>,
+    }
+
     // === Errors ===
     const ENotAuthorized: u64 = 1;
     const EVersionMismatch: u64 = 2;
     const EParentMismatch: u64 = 3;
+
+    // ... (existing functions)
+
+    /// Updates the seal policy ID for the repository.
+    /// Only the owner or an existing collaborator can update the policy.
+    ///
+    /// # Arguments
+    /// * `repo` - The mutable reference to the repository.
+    /// * `new_policy_id` - The new Seal Policy ID.
+    /// * `ctx` - The transaction context.
+    public fun set_seal_policy(repo: &mut Repository, new_policy_id: Option<vector<u8>>, ctx: &TxContext) {
+        assert!(is_owner_or_collaborator(repo, ctx.sender()), ENotAuthorized);
+        repo.seal_policy_id = new_policy_id;
+
+        event::emit(SealPolicyUpdatedEvent {
+            repo_id: object::uid_to_address(&repo.id),
+            new_policy_id,
+        });
+    }
 
     /// Creates a new repository and shares it as a shared object.
     ///
@@ -254,22 +279,7 @@ module wit_repository::repository {
         });
     }
 
-    /// Updates the Seal Policy ID for the repository.
-    /// This allows changing the encryption policy (e.g., for key rotation or access control updates).
-    /// Only the owner or an existing collaborator can update the policy.
-    ///
-    /// # Arguments
-    /// * `repo` - The mutable reference to the repository.
-    /// * `new_policy_id` - The new Seal Policy ID (optional).
-    /// * `ctx` - The transaction context.
-    public fun set_seal_policy(
-        repo: &mut Repository,
-        new_policy_id: Option<vector<u8>>,
-        ctx: &TxContext,
-    ) {
-        assert!(is_owner_or_collaborator(repo, ctx.sender()), ENotAuthorized);
-        repo.seal_policy_id = new_policy_id;
-    }
+
 
     // === Internal Helper Functions ===
 
