@@ -3,12 +3,15 @@ import { useParams, Link } from 'react-router-dom';
 import { useRepository } from '@/hooks/useRepository';
 import { useManifest } from '@/hooks/useManifest';
 import { useFileContent, type FileRef } from '@/hooks/useFile';
+import { useCommitHistory } from '@/hooks/useCommitHistory';
 import { FileTree } from '@/components/repo/FileTree';
 import { FileViewer } from '@/components/repo/FileViewer';
+import { CommitList } from '@/components/repo/CommitList';
+import { CommitDetail } from '@/components/repo/CommitDetail';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { GitBranch, Copy, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { GitBranch, Copy, ArrowLeft, AlertCircle, Loader2, GitCommit } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
 export default function RepoDetail() {
@@ -18,8 +21,14 @@ export default function RepoDetail() {
     // State for file navigation - now supports both blob and quilt files
     const [selectedFile, setSelectedFile] = useState<{ path: string; fileRef: FileRef } | null>(null);
 
+    // State for commit selection
+    const [selectedCommit, setSelectedCommit] = useState<any>(null);
+
     // Fetch manifest only if we have a head_manifest
     const { data: manifest, isLoading: manifestLoading, error: manifestError } = useManifest(repo?.head_manifest);
+
+    // Fetch commit history
+    const { commits, isLoading: commitsLoading, error: commitsError } = useCommitHistory(repo?.head_commit);
 
     // Fetch file content based on selected file reference
     const { data: fileContent, isLoading: fileLoading, error: fileError } = useFileContent(selectedFile?.fileRef);
@@ -78,7 +87,12 @@ export default function RepoDetail() {
                     <TabsTrigger value="code" className="gap-2">
                         <GitBranch className="h-4 w-4" /> Code
                     </TabsTrigger>
-                    <TabsTrigger value="commits" disabled>Commits (Coming Soon)</TabsTrigger>
+                    <TabsTrigger value="commits" className="gap-2">
+                        <GitCommit className="h-4 w-4" /> Commits
+                        {commits.length > 0 && (
+                            <Badge variant="secondary" className="ml-1">{commits.length}</Badge>
+                        )}
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="code" className="mt-6">
@@ -167,9 +181,46 @@ export default function RepoDetail() {
                     </div>
                 </TabsContent>
 
-                <TabsContent value="commits">
-                    <div className="py-20 text-center text-slate-500">
-                        Commit history visualization is coming in the next update.
+                <TabsContent value="commits" className="mt-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Commits List */}
+                        <div className="md:col-span-2">
+                            <Card>
+                                <CardContent className="p-4">
+                                    {commitsLoading ? (
+                                        <div className="flex justify-center py-20">
+                                            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                                        </div>
+                                    ) : commitsError ? (
+                                        <div className="text-red-500 text-center py-20">
+                                            <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                                            <p>Failed to load commits</p>
+                                            <p className="text-xs mt-1">{String(commitsError)}</p>
+                                        </div>
+                                    ) : (
+                                        <CommitList
+                                            commits={commits}
+                                            onSelectCommit={setSelectedCommit}
+                                            selectedCommitId={selectedCommit?.id}
+                                        />
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Commit Detail Sidebar */}
+                        <div className="md:col-span-1">
+                            {selectedCommit ? (
+                                <CommitDetail commitWithId={selectedCommit} />
+                            ) : (
+                                <Card>
+                                    <CardContent className="p-6 text-center text-slate-400">
+                                        <GitCommit className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                                        <p className="text-sm">Select a commit to view details</p>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
                     </div>
                 </TabsContent>
             </Tabs>

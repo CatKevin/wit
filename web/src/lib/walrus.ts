@@ -58,3 +58,12 @@ export async function getFileFromQuiltAsText(quiltId: string, identifier: string
     const blob = await getFileFromQuilt(quiltId, identifier);
     return blob.text();
 }
+
+// Read commit (JSON blob)
+export async function getCommit(blobId: string): Promise<any> {
+    const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/${blobId}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch commit ${blobId}: ${response.status} ${response.statusText}`);
+    }
+    return response.json();
+}
