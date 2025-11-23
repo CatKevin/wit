@@ -3,6 +3,7 @@ import { ConnectButton } from '@mysten/dapp-kit';
 import { NetworkSelector } from '@/components/layout/NetworkSelector';
 import Home from '@/pages/Home';
 import RepoDetail from '@/pages/RepoDetail';
+import CommitDetailPage from '@/pages/CommitDetailPage';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/repo/:id" element={<RepoDetail />} />
+            <Route path="/repo/:repoId/commit/:commitId" element={<CommitDetailPage />} />
           </Routes>
         </main>
       </div>

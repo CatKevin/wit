@@ -7,19 +7,19 @@ import type { CommitWithId } from '@/lib/types';
  * Useful for remote commits where tree.files is not available
  */
 export function useCommitWithManifest(commitWithId?: CommitWithId) {
-    const manifestId = commitWithId?.commit.tree.manifest_id;
+    const manifestId = commitWithId?.commit?.tree?.manifest_id;
 
     const { data: manifest } = useQuery({
         queryKey: ['manifest', manifestId],
         queryFn: () => getManifest(manifestId!),
-        enabled: !!manifestId && !commitWithId?.commit.tree.files,
+        enabled: !!manifestId && !commitWithId?.commit?.tree?.files,
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 
     if (!commitWithId) return null;
 
     // If commit already has files, return as-is
-    if (commitWithId.commit.tree.files) {
+    if (commitWithId.commit?.tree?.files) {
         return commitWithId;
     }
 
@@ -47,7 +47,7 @@ export function useCommitFileCount(commitWithId?: CommitWithId): number | null {
     const enriched = useCommitWithManifest(commitWithId);
 
     if (!enriched) return null;
-    if (enriched.commit.tree.files) {
+    if (enriched.commit?.tree?.files) {
         return Object.keys(enriched.commit.tree.files).length;
     }
 

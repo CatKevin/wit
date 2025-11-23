@@ -1,4 +1,5 @@
 import { formatDistanceToNow, format } from 'date-fns';
+import { Link } from 'react-router-dom';
 import { GitCommit, User, Calendar, FileText } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useCommitFileCount } from '@/hooks/useCommitWithManifest';
@@ -8,9 +9,10 @@ interface CommitListProps {
     commits: CommitWithId[];
     onSelectCommit?: (commit: CommitWithId) => void;
     selectedCommitId?: string;
+    repoId?: string;  // For navigation to commit detail page
 }
 
-export function CommitList({ commits, onSelectCommit, selectedCommitId }: CommitListProps) {
+export function CommitList({ commits, onSelectCommit, selectedCommitId, repoId }: CommitListProps) {
     if (commits.length === 0) {
         return (
             <div className="text-center py-12 text-slate-400">
@@ -28,6 +30,7 @@ export function CommitList({ commits, onSelectCommit, selectedCommitId }: Commit
                     commitWithId={commitWithId}
                     onClick={() => onSelectCommit?.(commitWithId)}
                     isSelected={commitWithId.id === selectedCommitId}
+                    repoId={repoId}
                 />
             ))}
         </div>
@@ -38,9 +41,10 @@ interface CommitCardProps {
     commitWithId: CommitWithId;
     onClick: () => void;
     isSelected: boolean;
+    repoId?: string;
 }
 
-function CommitCard({ commitWithId, onClick, isSelected }: CommitCardProps) {
+function CommitCard({ commitWithId, onClick, isSelected, repoId }: CommitCardProps) {
     const { id, commit } = commitWithId;
 
     // Extract first line of commit message as title
@@ -65,14 +69,9 @@ function CommitCard({ commitWithId, onClick, isSelected }: CommitCardProps) {
     // Count files - fetch from manifest if needed
     const fileCount = useCommitFileCount(commitWithId);
 
-    return (
-        <Card
-            className={`p-4 cursor-pointer transition-all hover:shadow-md ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-slate-50'
-                }`}
-            onClick={onClick}
-        >
-            <div className="space-y-2">
-                {/* Title */}
+    const CardContent = (
+        <div className="space-y-2">
+            {/* Title */}
                 <div className="flex items-start gap-2">
                     <GitCommit className="h-5 w-5 text-slate-400 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
@@ -105,7 +104,30 @@ function CommitCard({ commitWithId, onClick, isSelected }: CommitCardProps) {
                         {id.slice(0, 8)}
                     </div>
                 </div>
-            </div>
+        </div>
+    );
+
+    // Wrap in Link if repoId provided, otherwise use Card with onClick
+    if (repoId) {
+        return (
+            <Link to={`/repo/${repoId}/commit/${id}`} className="block">
+                <Card
+                    className={`p-4 transition-all hover:shadow-md ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-slate-50'
+                        }`}
+                >
+                    {CardContent}
+                </Card>
+            </Link>
+        );
+    }
+
+    return (
+        <Card
+            className={`p-4 cursor-pointer transition-all hover:shadow-md ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-slate-50'
+                }`}
+            onClick={onClick}
+        >
+            {CardContent}
         </Card>
     );
 }

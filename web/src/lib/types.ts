@@ -5,7 +5,8 @@ export interface CommitFile {
     size: number;
     mode: string;
     mtime: number;
-    blob_ref?: string;
+    id?: string;        // Walrus file blob ID (for manifest files)
+    blob_ref?: string;  // Legacy/alternative blob reference
 }
 
 export interface CommitTree {
@@ -31,4 +32,44 @@ export interface Commit {
 export interface CommitWithId {
     id: string;
     commit: Commit;
+}
+
+// File change types for diff
+export type FileChangeType = 'added' | 'modified' | 'deleted';
+
+export interface FileChange {
+    type: FileChangeType;
+    path: string;
+    oldMeta?: CommitFile;  // exists for modified/deleted
+    newMeta?: CommitFile;  // exists for added/modified
+    stats?: {
+        additions: number;
+        deletions: number;
+    };
+}
+
+export interface CommitDiffChanges {
+    added: FileChange[];
+    modified: FileChange[];
+    deleted: FileChange[];
+}
+
+export interface CommitDiffStats {
+    filesChanged: number;
+    totalAdditions: number;
+    totalDeletions: number;
+}
+
+export interface CommitDiff {
+    commit: CommitWithId;
+    parentCommit: CommitWithId | null;
+    changes: CommitDiffChanges;
+    stats: CommitDiffStats;
+}
+
+export interface LineDiff {
+    type: 'context' | 'added' | 'removed';
+    oldLineNumber?: number;
+    newLineNumber?: number;
+    content: string;
 }

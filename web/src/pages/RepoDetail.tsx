@@ -202,6 +202,7 @@ export default function RepoDetail() {
                                             commits={commits}
                                             onSelectCommit={setSelectedCommit}
                                             selectedCommitId={selectedCommit?.id}
+                                            repoId={id}
                                         />
                                     )}
                                 </CardContent>
