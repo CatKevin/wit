@@ -18,7 +18,7 @@ export interface Repository {
 }
 
 // Robust decoder function from CLI (handles multiple formats)
-function decodeVecAsString(raw: unknown): string | null {
+export function decodeVecAsString(raw: unknown): string | null {
     if (raw === null || raw === undefined) return null;
 
     // Handle direct string (including hex format)

@@ -46,6 +46,19 @@ module wit_repository::repository {
         parent: Option<vector<u8>>,
     }
 
+    /// Event emitted when a new repository is created.
+    public struct RepositoryCreatedEvent has copy, drop {
+        repo_id: address,
+        owner: address,
+        name: vector<u8>,
+    }
+
+    /// Event emitted when a collaborator is added.
+    public struct CollaboratorAddedEvent has copy, drop {
+        repo_id: address,
+        user_address: address,
+    }
+
     // === Errors ===
     const ENotAuthorized: u64 = 1;
     const EVersionMismatch: u64 = 2;
@@ -64,18 +77,30 @@ module wit_repository::repository {
         seal_policy_id: Option<vector<u8>>,
         ctx: &mut TxContext,
     ) {
+        let id = object::new(ctx);
+        let repo_id = object::uid_to_address(&id);
+        let owner = ctx.sender();
+
         let repo = Repository {
-            id: object::new(ctx),
-            owner: ctx.sender(),
+            id,
+            owner,
             collaborators: vector[],
             head_commit: option::none(),
             head_manifest: option::none(),
             head_quilt: option::none(),
             version: 0,
             seal_policy_id,
-            name,
+            name: name,
             description,
         };
+        
+        // Emit event before moving the object
+        event::emit(RepositoryCreatedEvent {
+            repo_id,
+            owner,
+            name: repo.name,
+        });
+
         // Share the object so it can be accessed by collaborators and the public.
         transfer::public_share_object(repo);
     }
@@ -91,6 +116,11 @@ module wit_repository::repository {
         assert!(is_owner_or_collaborator(repo, ctx.sender()), ENotAuthorized);
         if (!contains(&repo.collaborators, addr)) {
             repo.collaborators.push_back(addr);
+            
+            event::emit(CollaboratorAddedEvent {
+                repo_id: object::uid_to_address(&repo.id),
+                user_address: addr,
+            });
         }
     }
 

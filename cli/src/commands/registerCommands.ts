@@ -1,18 +1,18 @@
-import {Command} from 'commander';
-import {initAction} from './init';
-import {commitAction, logAction} from './commit';
-import {checkoutAction} from './checkout';
-import {diffAction} from './diff';
-import {makeStubAction} from './stub';
-import {addAction, resetAction, statusAction} from './workspace';
-import {pushAction} from './push';
-import {cloneAction} from './clone';
-import {fetchAction} from './fetch';
-import {pullAction} from './pull';
-import {inviteAction} from './invite';
-import {colorsEnabled, setColorsEnabled} from '../lib/ui';
-import {accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction} from './account';
-import {pushBlobAction, pullBlobAction} from './walrusBlob';
+import { Command } from 'commander';
+import { initAction } from './init';
+import { commitAction, logAction } from './commit';
+import { checkoutAction } from './checkout';
+import { diffAction } from './diff';
+import { makeStubAction } from './stub';
+import { addAction, resetAction, statusAction } from './workspace';
+import { pushAction } from './push';
+import { cloneAction } from './clone';
+import { fetchAction } from './fetch';
+import { pullAction } from './pull';
+import { inviteAction } from './invite';
+import { colorsEnabled, setColorsEnabled } from '../lib/ui';
+import { accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction } from './account';
+import { pushBlobAction, pullBlobAction } from './walrusBlob';
 import {
   pushQuiltAction,
   pullQuiltAction,
@@ -21,6 +21,7 @@ import {
   listQuiltIdentifiersCommand,
   catQuiltFileById,
 } from './walrusQuilt';
+import { listAction } from './list';
 
 export function registerCommands(program: Command): void {
   // Global options (propagate to subcommands)
@@ -53,11 +54,11 @@ export function registerCommands(program: Command): void {
     .option('--staged', 'unstage paths from the index (alias of reset)')
     .argument('[paths...]')
     .description('Restore worktree files from index or unstage when using --staged')
-    .action((paths: string[], opts: {staged?: boolean}) => {
+    .action((paths: string[], opts: { staged?: boolean }) => {
       if (opts.staged) {
-        return resetAction(paths, {staged: true});
+        return resetAction(paths, { staged: true });
       }
-      return resetAction(paths, {staged: false});
+      return resetAction(paths, { staged: false });
     });
 
   program
@@ -112,7 +113,7 @@ export function registerCommands(program: Command): void {
     .description('Upload a single blob to Walrus (hash-verified)')
     .option('--epochs <n>', 'epochs to store blob for (default 1)', (v) => parseInt(v, 10), 1)
     .option('--deletable', 'mark blob deletable (default true)', true)
-    .action((pathArg: string, opts: {epochs: number; deletable?: boolean}) => pushBlobAction(pathArg, opts));
+    .action((pathArg: string, opts: { epochs: number; deletable?: boolean }) => pushBlobAction(pathArg, opts));
 
   program
     .command('pull-blob <blob_id> <out_path>')
@@ -125,7 +126,7 @@ export function registerCommands(program: Command): void {
     .option('--epochs <n>', 'epochs to store quilt for (default 1)', (v) => parseInt(v, 10), 1)
     .option('--deletable', 'mark quilt deletable (default true)', true)
     .option('--manifest-out <path>', 'where to write manifest (default ./quilt-manifest.json)')
-    .action((dir: string, opts: {epochs: number; deletable?: boolean; manifestOut?: string}) => pushQuiltAction(dir, opts));
+    .action((dir: string, opts: { epochs: number; deletable?: boolean; manifestOut?: string }) => pushQuiltAction(dir, opts));
 
   program
     .command('pull-quilt <manifest_path> <out_dir>')
@@ -136,8 +137,8 @@ export function registerCommands(program: Command): void {
     .command('quilt-cat <manifest_path> <identifier>')
     .description('Fetch a single file from a quilt (by identifier) and print to stdout')
     .action(async (manifestPath: string, identifier: string) => {
-      const {fetchQuiltFile} = await import('./walrusQuilt.js');
-      const {bytes} = await fetchQuiltFile(manifestPath, identifier);
+      const { fetchQuiltFile } = await import('./walrusQuilt.js');
+      const { bytes } = await fetchQuiltFile(manifestPath, identifier);
       process.stdout.write(Buffer.from(bytes));
     });
 
@@ -156,12 +157,19 @@ export function registerCommands(program: Command): void {
     .description('Upload directory as legacy archive (single blob with embedded manifest)')
     .option('--epochs <n>', 'epochs to store archive for (default 1)', (v) => parseInt(v, 10), 1)
     .option('--deletable', 'mark archive deletable (default true)', true)
-    .action((dir: string, opts: {epochs: number; deletable?: boolean}) => pushQuiltLegacyAction(dir, opts));
+    .action((dir: string, opts: { epochs: number; deletable?: boolean }) => pushQuiltLegacyAction(dir, opts));
 
   program
     .command('pull-quilt-legacy <blob_id> <out_dir>')
     .description('Download legacy archive and restore files (hash/root_hash verified)')
     .action((blobId: string, outDir: string) => pullQuiltLegacyAction(blobId, outDir));
+
+  program
+    .command('list')
+    .description('List repositories you own or collaborate on')
+    .option('--owned', 'Show only owned repositories')
+    .option('--collaborated', 'Show only collaborated repositories')
+    .action(listAction);
 
   const account = program.command('account').description('Manage wit accounts (keys, active address)');
   account.command('list').description('List locally stored accounts (keys) and show active').action(accountListAction);
