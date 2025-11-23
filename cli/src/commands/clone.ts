@@ -10,6 +10,7 @@ import {canonicalStringify, sha256Base64} from '../lib/serialize';
 import {ensureDirForFile, writeIndex, type Index} from '../lib/fs';
 import {idToFileName, writeCommitIdMap, readCommitIdMap} from '../lib/state';
 import {writeRemoteRef, writeRemoteState, writeRepoConfig} from '../lib/repo';
+import {ensureSealSecret, decryptWithSeal, type SealKey} from '../lib/seal';
 
 type RemoteCommit = {
   tree: {root_hash: string; manifest_id: string | null; quilt_id: string | null};
@@ -61,6 +62,36 @@ export async function cloneAction(repoId: string): Promise<void> {
   }
   await cacheJson(path.join(witPath, 'objects', 'manifests', `${idToFileName(onchain.headManifest)}.json`), canonicalStringify(manifest));
 
+  // Persist repo config seal policy if present
+  if (onchain.sealPolicyId) {
+    try {
+      const cfgRaw = await fs.readFile(path.join(witPath, 'config.json'), 'utf8');
+      const cfg = JSON.parse(cfgRaw);
+      cfg.seal_policy_id = onchain.sealPolicyId;
+      await writeRepoConfig(witPath, cfg as any);
+    } catch {
+      // best-effort
+    }
+  }
+
+  let seal: SealKey | null = null;
+  const sealPolicyId = onchain.sealPolicyId || null;
+  const hasEncrypted = Object.values(manifest.files).some((meta: any) => meta.enc);
+  if (hasEncrypted) {
+    if (!sealPolicyId) {
+      throw new Error('Encrypted repository detected but no seal policy id on chain.');
+    }
+    try {
+      seal = await ensureSealSecret(sealPolicyId, {repoRoot: process.cwd(), createIfMissing: false});
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.log(colors.red(`Missing seal secret for policy ${sealPolicyId}: ${err?.message || err}`));
+      // eslint-disable-next-line no-console
+      console.log(colors.red('Set WIT_SEAL_SECRET or .wit/seal/<policy>.secret then retry clone.'));
+      return;
+    }
+  }
+
   // Download remote commit
   // eslint-disable-next-line no-console
   console.log(colors.cyan('Downloading commit...'));
@@ -80,13 +111,14 @@ export async function cloneAction(repoId: string): Promise<void> {
   for (let i = 0; i < entries.length; i += 1) {
     const [rel, meta] = entries[i];
     const data = await fetchFileBytes(walrusSvc, manifest, rel, meta);
-    const hash = sha256Base64(data);
-    if (hash !== meta.hash || data.length !== meta.size) {
+    const plain = meta.enc ? decryptWithSeal(data, meta.enc, seal!) : data;
+    const hash = sha256Base64(plain);
+    if (hash !== meta.hash || plain.length !== meta.size) {
       throw new Error(`Hash/size mismatch for ${rel}`);
     }
     const abs = path.join(process.cwd(), rel);
     await ensureDirForFile(abs);
-    await fs.writeFile(abs, data);
+    await fs.writeFile(abs, plain);
     const mode = parseInt(meta.mode, 10) & 0o777;
     await fs.chmod(abs, mode);
     index[rel] = {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime};
@@ -121,7 +153,7 @@ async function fetchFileBytes(
   walrusSvc: WalrusService,
   manifest: Manifest,
   rel: string,
-  meta: {id?: string; hash: string; size: number}
+  meta: {id?: string; hash: string; size: number; enc?: any}
 ): Promise<Buffer> {
   // Prefer quilt fetch when quilt_id is present; fallback to direct file id
   if (manifest.quilt_id) {

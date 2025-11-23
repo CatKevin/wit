@@ -18,7 +18,7 @@ interface FileTreeNode {
 
 interface FileTreeProps {
     manifest: Manifest;
-    onSelectFile: (path: string, blobId: string) => void;
+    onSelectFile: (path: string, meta: Manifest['files'][string]) => void;
     selectedPath?: string;
 }
 
@@ -131,24 +131,7 @@ export function FileTree({ manifest, onSelectFile, selectedPath }: FileTreeProps
 
     const handleSelect = (node: FileTreeNode) => {
         if (node.type === 'file' && node.metadata) {
-            // If blob_ref exists (large file), use it; otherwise use hash as blobId (Quilt convention)
-            // Wait, Quilt convention: if it's in the quilt, we need the Quilt ID + path?
-            // Or does Walrus allow fetching by hash if it was uploaded as part of a Quilt?
-            // Actually, standard Walrus Quilt: files are accessible via `quilt_id/path`.
-            // BUT, our manifest stores `hash`. If we uploaded as Blob, we have `blob_ref`.
-            // If it's a small file inside a Quilt, we might need to fetch the Quilt blob and parse it?
-            // NO, Walrus SDK `readQuilt` fetches individual files.
-            // Let's assume for MVP: 
-            // 1. If `blob_ref` exists, use it.
-            // 2. If not, we might need to fetch via Quilt ID + Path?
-            //    Wait, `getBlob(id)` works for any blob.
-            //    If the file content is deduplicated by hash, `hash` IS the blob ID?
-            //    In Walrus, usually yes, if we uploaded it as a blob.
-            //    If we uploaded a Quilt, the files inside might be blobs.
-            //    Let's assume `hash` is the Blob ID for now (standard CAS).
-            //    If this fails, we'll need to revisit the Quilt loading logic.
-            const blobId = node.metadata.blob_ref || node.metadata.hash;
-            onSelectFile(node.path, blobId);
+            onSelectFile(node.path, node.metadata as any);
         }
     };
 

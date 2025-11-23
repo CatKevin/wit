@@ -32,7 +32,12 @@ export function registerCommands(program: Command): void {
   program
     .command('init [name]')
     .description('Initialize a wit repository (creates .wit, config, ignores)')
-    .action(initAction);
+    .option('--private', 'Initialize as private repository (generate seal policy + secret)')
+    .option('--seal-policy <id>', 'Use existing seal policy id for private repo')
+    .option('--seal-secret <secret>', 'Explicit seal secret (otherwise auto-generated/stored)')
+    .action((name: string, opts: { private?: boolean; sealPolicy?: string; sealSecret?: string }) =>
+      initAction(name, { private: opts.private, sealPolicy: opts.sealPolicy, sealSecret: opts.sealSecret })
+    );
 
   program
     .command('status')
@@ -108,7 +113,9 @@ export function registerCommands(program: Command): void {
   program
     .command('invite <address>')
     .description('Add a collaborator to the repository')
-    .action(inviteAction);
+    .option('--seal-policy <id>', 'Seal policy id to apply (defaults to repo config)')
+    .option('--seal-secret <secret>', 'Seal secret to save locally when setting policy')
+    .action((address: string, opts: { sealPolicy?: string; sealSecret?: string }) => inviteAction(address, opts));
 
   program
     .command('transfer <new_owner>')

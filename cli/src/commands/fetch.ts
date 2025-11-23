@@ -38,6 +38,10 @@ export async function fetchAction(): Promise<void> {
     console.log(colors.yellow('Remote repository has no head; nothing to fetch.'));
     return;
   }
+  if (onchain.sealPolicyId && repoCfg.seal_policy_id !== onchain.sealPolicyId) {
+    repoCfg.seal_policy_id = onchain.sealPolicyId;
+    await fs.writeFile(path.join(witPath, 'config.json'), JSON.stringify(repoCfg, null, 2) + '\n', 'utf8');
+  }
 
   // Download manifest and commit for validation/cache
   const manifest = await loadManifestCached(walrusSvc, witPath, onchain.headManifest);

@@ -6,6 +6,15 @@ const fileMeta = z.object({
   mode: z.string().regex(/^\d{6}$/),
   mtime: z.number().int().nonnegative(),
   id: z.string().min(1).optional(),
+  enc: z
+    .object({
+      alg: z.literal('aes-256-gcm'),
+      iv: z.string().min(1),
+      tag: z.string().min(1),
+      policy: z.string().min(1).optional(),
+      cipher_size: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
 });
 
 export const ManifestSchema = z.object({

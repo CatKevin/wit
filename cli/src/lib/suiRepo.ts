@@ -195,3 +195,19 @@ export async function removeCollaborator(
   });
   await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
 }
+
+export async function setSealPolicy(
+  client: SuiClient,
+  signer: Signer,
+  params: { repoId: string; policyId: string | null; packageId?: string; moduleName?: string }
+): Promise<void> {
+  const pkg = params.packageId || WIT_PACKAGE_ID;
+  const mod = params.moduleName || WIT_MODULE_NAME;
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(getSignerAddress(signer));
+  tx.moveCall({
+    target: `${pkg}::${mod}::set_seal_policy`,
+    arguments: [tx.object(params.repoId), tx.pure.option('vector<u8>', params.policyId ? utf8ToVec(params.policyId) : null)],
+  });
+  await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
+}

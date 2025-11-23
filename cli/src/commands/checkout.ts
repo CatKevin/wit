@@ -15,13 +15,16 @@ import {computeRootHash} from '../lib/manifest';
 import {WalrusService} from '../lib/walrus';
 import {colors} from '../lib/ui';
 import {sha256Base64} from '../lib/serialize';
+import {readRepoConfig} from '../lib/repo';
+import {decryptWithSeal, ensureSealSecret, type SealKey} from '../lib/seal';
 
 const WIT_DIR = '.wit';
 
 export async function checkoutAction(commitId: string): Promise<void> {
   const witPath = await requireWitDir();
+  const repoCfg = await readRepoConfig(witPath);
   const commit = await readCommitById(witPath, commitId);
-  const files = await resolveFilesForCommit(witPath, commit);
+  const files = await resolveFilesForCommit(witPath, commit, repoCfg.seal_policy_id || null);
 
   const headRefPath = await readHeadRefPath(witPath);
   const indexPath = path.join(witPath, 'index');
@@ -82,7 +85,7 @@ function safeJoin(base: string, rel: string): string {
   return path.join(base, norm);
 }
 
-async function resolveFilesForCommit(witPath: string, commit: any): Promise<Index> {
+async function resolveFilesForCommit(witPath: string, commit: any, sealPolicyId: string | null): Promise<Index> {
   if (commit.tree?.files && Object.keys(commit.tree.files).length) {
     return commit.tree.files as Index;
   }
@@ -102,7 +105,7 @@ async function resolveFilesForCommit(witPath: string, commit: any): Promise<Inde
   if (computedRoot !== commit.tree.root_hash) {
     throw new Error('Commit root_hash does not match manifest.');
   }
-  await ensureBlobsFromManifest(witPath, manifest);
+  await ensureBlobsFromManifest(witPath, manifest, sealPolicyId);
   return manifest.files as Index;
 }
 
@@ -125,7 +128,7 @@ async function loadManifest(witPath: string, manifestId: string) {
   return manifest;
 }
 
-async function ensureBlobsFromManifest(witPath: string, manifest: any): Promise<void> {
+async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolicyId: string | null): Promise<void> {
   const entries = Object.entries(manifest.files) as [string, any][];
   const missing: {rel: string; meta: any}[] = [];
   for (const [rel, meta] of entries) {
@@ -138,15 +141,25 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any): Promise<
   const walrusSvc = await WalrusService.fromRepo();
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`Fetching ${missing.length} missing blobs from Walrus...`));
+  let seal: SealKey | null = null;
+  const hasEncrypted = entries.some(([, meta]) => meta.enc);
+  if (hasEncrypted) {
+    const policy = entries.find(([, meta]) => meta.enc)?.[1]?.enc?.policy || sealPolicyId;
+    if (!policy) {
+      throw new Error('Encrypted files detected but no seal policy id provided.');
+    }
+    seal = await ensureSealSecret(policy, {repoRoot: process.cwd(), createIfMissing: false});
+  }
   for (const {rel, meta} of missing) {
-    const data = await fetchFileBytes(walrusSvc, manifest, rel, meta);
-    const hash = sha256Base64(data);
-    if (hash !== meta.hash || data.length !== meta.size) {
+    const data = await fetchFileBytes(walrusSvc, manifest, rel, meta, seal);
+    const plain = seal && meta.enc ? decryptWithSeal(data, meta.enc, seal) : data;
+    const hash = sha256Base64(plain);
+    if (hash !== meta.hash || plain.length !== meta.size) {
       throw new Error(`Downloaded blob mismatch for ${rel}`);
     }
     const blobPath = path.join(witPath, 'objects', 'blobs', blobFileName(meta.hash));
     await ensureDirForFile(blobPath);
-    await fs.writeFile(blobPath, data);
+    await fs.writeFile(blobPath, plain);
   }
 }
 
@@ -158,7 +171,8 @@ async function fetchFileBytes(
   walrusSvc: WalrusService,
   manifest: any,
   rel: string,
-  meta: {id?: string; hash: string; size: number}
+  meta: {id?: string; hash: string; size: number; enc?: any},
+  seal?: SealKey | null
 ): Promise<Buffer> {
   if (manifest.quilt_id) {
     try {

@@ -8,6 +8,13 @@ export type FileMeta = {
   size: number;
   mode: string;
   mtime: number;
+  enc?: {
+    alg: 'aes-256-gcm';
+    iv: string;
+    tag: string;
+    policy?: string;
+    cipher_size?: number;
+  };
 };
 
 export type Index = Record<string, FileMeta>;

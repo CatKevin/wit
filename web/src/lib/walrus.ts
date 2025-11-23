@@ -10,6 +10,13 @@ export interface ManifestFile {
     mtime: number;
     id?: string; // Walrus blob ID for individual files
     blob_ref?: string; // Legacy/alternative blob reference
+    enc?: {
+        alg: 'aes-256-gcm';
+        iv: string;
+        tag: string;
+        policy?: string;
+        cipher_size?: number;
+    };
 }
 
 export interface Manifest {
@@ -29,6 +36,14 @@ export async function getBlob(blobId: string): Promise<Blob> {
     return response.blob();
 }
 
+export async function getBlobArrayBuffer(blobId: string): Promise<ArrayBuffer> {
+    const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/${blobId}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch blob ${blobId}: ${response.status} ${response.statusText}`);
+    }
+    return response.arrayBuffer();
+}
+
 // Read file from Quilt using quilt ID + file identifier (path)
 // API Format: GET $AGGREGATOR/v1/blobs/by-quilt-id/<quilt-id>/<identifier>
 export async function getFileFromQuilt(quiltId: string, identifier: string): Promise<Blob> {
@@ -37,6 +52,14 @@ export async function getFileFromQuilt(quiltId: string, identifier: string): Pro
         throw new Error(`Failed to fetch file ${identifier} from quilt ${quiltId}: ${response.status} ${response.statusText}`);
     }
     return response.blob();
+}
+
+export async function getFileFromQuiltArrayBuffer(quiltId: string, identifier: string): Promise<ArrayBuffer> {
+    const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/by-quilt-id/${quiltId}/${identifier}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch file ${identifier} from quilt ${quiltId}: ${response.status} ${response.statusText}`);
+    }
+    return response.arrayBuffer();
 }
 
 // Read manifest (JSON blob) via Aggregator

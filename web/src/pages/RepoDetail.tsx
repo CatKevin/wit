@@ -109,24 +109,22 @@ export default function RepoDetail() {
                                             <div className="mt-2 text-xs font-mono bg-red-50 p-2 rounded">{String(manifestError)}</div>
                                         </div>
                                     ) : manifest ? (
-                                        <FileTree
-                                            manifest={manifest}
-                                            onSelectFile={(path, blobId) => {
-                                                // Check if file has dedicated blob_ref or is in quilt
-                                                const fileMetadata = manifest.files[path];
-                                                if (fileMetadata?.blob_ref) {
-                                                    // Standalone blob
-                                                    setSelectedFile({ path, fileRef: { blobId: fileMetadata.blob_ref } });
-                                                } else if (manifest.quilt_id) {
-                                                    // File in quilt
-                                                    setSelectedFile({ path, fileRef: { quiltId: manifest.quilt_id, identifier: path } });
-                                                } else {
-                                                    // Fallback
-                                                    setSelectedFile({ path, fileRef: { blobId } });
-                                                }
-                                            }}
-                                            selectedPath={selectedFile?.path}
-                                        />
+                                    <FileTree
+                                        manifest={manifest}
+                                        onSelectFile={(path, meta) => {
+                                            if (meta?.blob_ref) {
+                                                setSelectedFile({ path, fileRef: { blobId: meta.blob_ref, enc: meta.enc, policyId: repo.seal_policy_id } });
+                                            } else if (manifest.quilt_id) {
+                                                setSelectedFile({
+                                                    path,
+                                                    fileRef: { quiltId: manifest.quilt_id, identifier: path, enc: meta.enc, policyId: repo.seal_policy_id },
+                                                });
+                                            } else {
+                                                setSelectedFile({ path, fileRef: { blobId: meta.hash, enc: meta.enc, policyId: repo.seal_policy_id } });
+                                            }
+                                        }}
+                                        selectedPath={selectedFile?.path}
+                                    />
                                     ) : (
                                         <div className="text-center p-6 space-y-4">
                                             <div className="text-slate-400">

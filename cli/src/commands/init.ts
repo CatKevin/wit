@@ -1,6 +1,8 @@
+import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import { readActiveAddress } from '../lib/keys';
+import {readActiveAddress} from '../lib/keys';
+import {ensureSealSecret} from '../lib/seal';
 
 type GlobalConfig = {
   author?: string;
@@ -22,9 +24,15 @@ type RepoConfig = {
 
 const DEFAULT_RELAYS = ['https://upload-relay.testnet.walrus.space'];
 const DEFAULT_NETWORK = 'testnet';
-const IGNORE_ENTRIES = ['.wit/', '~/.wit/keys', '.env.local', '*.pem'];
+const IGNORE_ENTRIES = ['.wit/', '~/.wit/keys', '.env.local', '*.pem', '.wit/seal'];
 
-export async function initAction(name?: string): Promise<void> {
+type InitOptions = {
+  private?: boolean;
+  sealPolicy?: string;
+  sealSecret?: string;
+};
+
+export async function initAction(name?: string, options?: InitOptions): Promise<void> {
   const cwd = process.cwd();
   const repoName = name || path.basename(cwd);
   const witDir = path.join(cwd, '.wit');
@@ -34,6 +42,14 @@ export async function initAction(name?: string): Promise<void> {
   const globalCfg = await readGlobalConfig();
   const activeAddress = await readActiveAddress();
   const repoCfg = buildRepoConfig(repoName, globalCfg, activeAddress);
+
+  const wantsPrivate = options?.private || Boolean(options?.sealPolicy || options?.sealSecret);
+  if (wantsPrivate) {
+    const policyId = options?.sealPolicy || generatePolicyId();
+    repoCfg.seal_policy_id = policyId;
+    await ensureSealSecret(policyId, {repoRoot: cwd, secret: options?.sealSecret, createIfMissing: true});
+  }
+
   await writeConfigIfMissing(path.join(witDir, 'config.json'), repoCfg);
 
   await ensureFile(path.join(witDir, 'HEAD'), 'refs/heads/main\n');
@@ -93,6 +109,10 @@ function buildRepoConfig(repoName: string, globalCfg: GlobalConfig, activeAddres
     seal_policy_id: null,
     created_at: new Date().toISOString(),
   };
+}
+
+function generatePolicyId(): string {
+  return crypto.randomBytes(16).toString('hex');
 }
 
 async function writeConfigIfMissing(file: string, cfg: RepoConfig): Promise<void> {

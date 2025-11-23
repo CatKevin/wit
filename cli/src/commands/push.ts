@@ -11,8 +11,9 @@ import {readCommitById, readCommitIdMap, readHeadRefPath, readRef, writeCommitId
 import {readRepoConfig, writeRepoConfig, writeRemoteState, requireWitDir, writeRemoteRef} from '../lib/repo';
 import {WalrusService, resolveWalrusConfig} from '../lib/walrus';
 import {loadSigner, checkResources} from '../lib/keys';
-import {fetchRepositoryStateWithRetry, createRepository, updateRepositoryHead} from '../lib/suiRepo';
+import {fetchRepositoryStateWithRetry, createRepository, updateRepositoryHead, setSealPolicy} from '../lib/suiRepo';
 import {ManifestSchema, type Manifest} from '../lib/schema';
+import {encryptWithSeal, ensureSealSecret, type SealKey} from '../lib/seal';
 
 type CommitWithId = {id: string; commit: CommitObject};
 type CommitFileMeta = CommitObject['tree']['files'][string];
@@ -38,6 +39,19 @@ export async function pushAction(): Promise<void> {
     throw new Error('HEAD root_hash does not match file list. Re-commit or fix index.');
   }
 
+  let seal: SealKey | null = null;
+  if (repoCfg.seal_policy_id) {
+    try {
+      seal = await ensureSealSecret(repoCfg.seal_policy_id, {repoRoot: process.cwd(), createIfMissing: false});
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.log(colors.red(`Seal policy set but secret missing: ${err?.message || err}.`));
+      // eslint-disable-next-line no-console
+      console.log(colors.red('Set WIT_SEAL_SECRET or place .wit/seal/<policy>.secret, then retry push.'));
+      return;
+    }
+  }
+
   const commitMap = await readCommitIdMap(witPath);
   const {chain, baseRemoteId} = await collectChain(witPath, headId, commitMap);
 
@@ -60,6 +74,10 @@ export async function pushAction(): Promise<void> {
   }
 
   const onchainState = await fetchRepositoryStateWithRetry(suiClient, repoId);
+
+  if (repoCfg.seal_policy_id && onchainState.sealPolicyId !== repoCfg.seal_policy_id) {
+    await setSealPolicy(suiClient, signerInfo.signer, {repoId, policyId: repoCfg.seal_policy_id});
+  }
 
   if (onchainState.headCommit && baseRemoteId !== onchainState.headCommit) {
     throw new Error('Remote head diverges from local history; run `wit pull`/`fetch` or reset first.');
@@ -98,14 +116,7 @@ export async function pushAction(): Promise<void> {
     const item = chain[i];
     // eslint-disable-next-line no-console
     console.log(colors.cyan(`Uploading commit ${i + 1}/${chain.length}: ${item.id}`));
-    const uploaded = await uploadCommitSnapshot(
-      witPath,
-      item.id,
-      item.commit,
-      parentRemoteId,
-      walrusSvc,
-      signerInfo.signer
-    );
+    const uploaded = await uploadCommitSnapshot(witPath, item.id, item.commit, parentRemoteId, walrusSvc, signerInfo.signer, seal);
     if (!uploaded) {
       // Upload failed with friendly message already printed
       return;
@@ -193,7 +204,8 @@ async function uploadCommitSnapshot(
   commit: CommitObject,
   parentRemoteId: string | null,
   walrusSvc: WalrusService,
-  signer: Signer
+  signer: Signer,
+  seal?: SealKey | null
 ): Promise<{manifestId: string; quiltId: string; commitId: string} | null> {
   // eslint-disable-next-line no-console
   console.log(colors.cyan('  Building and verifying file snapshot...'));
@@ -212,20 +224,41 @@ async function uploadCommitSnapshot(
     files.push({rel, meta, data: buf});
   }
 
-  const walrusBlobs = files.map(({rel, data, meta}) => ({
-    contents: data,
-    identifier: rel,
-    tags: {
-      hash: meta.hash,
-      size: String(meta.size),
-      mode: meta.mode,
-      mtime: String(meta.mtime),
-    },
-  }));
+  const walrusBlobs = files.map(({rel, data, meta}) => {
+    let contents = data;
+    let enc: any | undefined;
+    if (seal) {
+      const encrypted = encryptWithSeal(data, seal);
+      contents = encrypted.cipher;
+      enc = encrypted.meta;
+    }
+    return {
+      contents,
+      identifier: rel,
+      tags: {
+        hash: meta.hash,
+        size: String(meta.size),
+        mode: meta.mode,
+        mtime: String(meta.mtime),
+        ...(enc
+          ? {
+              enc_alg: enc.alg,
+              enc_iv: enc.iv,
+              enc_tag: enc.tag,
+              enc_policy: enc.policy || seal?.policyId,
+              enc_size: String(enc.cipher_size || contents.length),
+            }
+          : {}),
+      },
+      enc,
+    };
+  });
+  const encMetas = walrusBlobs.map((b: any) => b.enc);
+  const walrusInputs = walrusBlobs.map(({contents, identifier, tags}) => ({contents, identifier, tags}));
 
   const quiltRes = await tryWithRetry(() =>
     walrusSvc.writeQuilt({
-      blobs: walrusBlobs,
+      blobs: walrusInputs,
       signer,
       epochs: 1,
       deletable: true,
@@ -259,13 +292,17 @@ async function uploadCommitSnapshot(
     quilt_id: quiltRes.quiltId,
     root_hash: rootHash,
     files: Object.fromEntries(
-      files.map(({rel, meta}, idx) => [
-        rel,
-        {
-          ...meta,
-          id: (filesRes[idx] as any)?.id || (filesRes[idx] as any)?.blobId || (filesRes[idx] as any)?.blob_id || '',
-        },
-      ])
+      files.map(({rel, meta}, idx) => {
+        const enc = encMetas[idx] as any;
+        return [
+          rel,
+          {
+            ...meta,
+            id: (filesRes[idx] as any)?.id || (filesRes[idx] as any)?.blobId || (filesRes[idx] as any)?.blob_id || '',
+            ...(enc ? {enc: enc} : {}),
+          },
+        ];
+      })
     ),
   });
 
@@ -291,7 +328,13 @@ async function uploadCommitSnapshot(
     author: commit.author,
     message: commit.message,
     timestamp: commit.timestamp,
-    extras: commit.extras,
+    extras: {
+      ...(commit.extras || {patch_id: null, tags: {}}),
+      tags: {
+        ...(commit.extras?.tags || {}),
+        ...(seal?.policyId ? {seal_policy_id: seal.policyId} : {}),
+      },
+    },
   };
   const remoteSerialized = canonicalStringify(remoteCommit);
   const commitUpload = await walrusSvc.writeBlob({
