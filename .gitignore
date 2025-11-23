@@ -1,2 +1,3 @@
 cli/node_modules/
 cli/dist/
+contracts/move/build

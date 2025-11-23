@@ -1,0 +1,11 @@
+[package]
+name = "wit_repository"
+version = "0.0.1"
+authors = ["wit-cli"]
+edition = "2024.beta"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
+
+[addresses]
+wit_repository = "0x0"
