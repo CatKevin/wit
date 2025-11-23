@@ -27,7 +27,13 @@ export function decodeVecAsString(raw: unknown): string | null {
   }
   if (Array.isArray(raw)) {
     if (!raw.length) return null;
-    return decodeVecAsString(raw[0]);
+    if (raw.every((v) => typeof v === 'number')) {
+      return Buffer.from(raw as number[]).toString('utf8');
+    }
+    if (raw.length === 1) {
+      return decodeVecAsString(raw[0]);
+    }
+    return Buffer.from(String(raw[0])).toString('utf8');
   }
   if (typeof raw === 'object') {
     const asRec = raw as Record<string, any>;
