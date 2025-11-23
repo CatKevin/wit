@@ -11,7 +11,14 @@ export async function inviteAction(address: string): Promise<void> {
   }
   // eslint-disable-next-line no-console
   console.log(colors.header('Adding collaborator...'));
-  const witPath = await requireWitDir();
+  let witPath: string;
+  try {
+    witPath = await requireWitDir();
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.log(colors.red(err?.message || 'Not a wit repository. Run `wit init` first.'));
+    return;
+  }
   const repoCfg = await readRepoConfig(witPath);
   if (!repoCfg.repo_id) {
     throw new Error('Missing repo_id. Run `wit push` once to create the remote repository.');
