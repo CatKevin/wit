@@ -148,7 +148,8 @@ export default function CommitDetailPage() {
                 <h2 className="text-lg font-semibold text-slate-900 mb-4">Changes</h2>
                 <FileChangesList
                     changes={changes}
-                    quiltId={commit.commit.tree.quilt_id || undefined}
+                    currentQuiltId={commit.commit.tree.quilt_id || undefined}
+                    parentQuiltId={parentCommit?.commit?.tree?.quilt_id || undefined}
                 />
             </div>
         </div>

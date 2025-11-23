@@ -7,10 +7,11 @@ import type { CommitDiffChanges, FileChange } from '@/lib/types';
 
 interface FileChangesListProps {
     changes: CommitDiffChanges;
-    quiltId?: string; // Optional quilt ID for file downloads
+    currentQuiltId?: string; // Current commit's quilt ID for new file downloads
+    parentQuiltId?: string; // Parent commit's quilt ID for old file downloads
 }
 
-export function FileChangesList({ changes, quiltId }: FileChangesListProps) {
+export function FileChangesList({ changes, currentQuiltId, parentQuiltId }: FileChangesListProps) {
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
     const allChanges = [
@@ -53,7 +54,8 @@ export function FileChangesList({ changes, quiltId }: FileChangesListProps) {
                         change={change}
                         isExpanded={isExpanded}
                         onToggle={() => toggleFileExpansion(change.path)}
-                        quiltId={quiltId}
+                        currentQuiltId={currentQuiltId}
+                        parentQuiltId={parentQuiltId}
                     />
                 );
             })}
@@ -65,10 +67,11 @@ interface FileChangeCardProps {
     change: FileChange & { sortOrder: number };
     isExpanded: boolean;
     onToggle: () => void;
-    quiltId?: string;
+    currentQuiltId?: string;
+    parentQuiltId?: string;
 }
 
-function FileChangeCard({ change, isExpanded, onToggle, quiltId }: FileChangeCardProps) {
+function FileChangeCard({ change, isExpanded, onToggle, currentQuiltId, parentQuiltId }: FileChangeCardProps) {
     const Icon =
         change.type === 'added' ? FilePlus :
         change.type === 'modified' ? FileEdit :
@@ -89,7 +92,7 @@ function FileChangeCard({ change, isExpanded, onToggle, quiltId }: FileChangeCar
     const sizeDiff = newSize - oldSize;
 
     // Fetch file diff when expanded
-    const { lineDiff, stats, isBinary, isLoading, error } = useFileDiff(change, quiltId);
+    const { lineDiff, stats, isBinary, isLoading, error } = useFileDiff(change, currentQuiltId, parentQuiltId);
 
     const ChevronIcon = isExpanded ? ChevronDown : ChevronRight;
 

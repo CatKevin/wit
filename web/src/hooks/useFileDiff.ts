@@ -17,10 +17,15 @@ export interface FileDiffResult {
  *
  * Downloads both old and new file contents (if applicable)
  * and computes line-by-line differences
+ *
+ * @param change - The file change to compute diff for
+ * @param currentQuiltId - Current commit's quilt ID for new file downloads
+ * @param parentQuiltId - Parent commit's quilt ID for old file downloads
  */
 export function useFileDiff(
     change: FileChange,
-    quiltId?: string
+    currentQuiltId?: string,
+    parentQuiltId?: string
 ): FileDiffResult {
     const { path, type, oldMeta, newMeta } = change;
 
@@ -29,14 +34,14 @@ export function useFileDiff(
 
     // Download old file content (for modified/deleted files)
     const { data: oldContent, isLoading: oldLoading, error: oldError } = useQuery<string>({
-        queryKey: ['file-content', oldMeta?.id || oldMeta?.blob_ref || `${quiltId}:${path}`, 'old'],
+        queryKey: ['file-content', oldMeta?.id || oldMeta?.blob_ref || `${parentQuiltId}:${path}`, 'old'],
         queryFn: async () => {
             if (!oldMeta) return '';
 
-            // If quiltId exists, always use quilt API (files are stored in quilt)
+            // If parentQuiltId exists, use quilt API with parent's quilt
             // The 'id' field in manifest is a quilt-internal reference, not a blob ID
-            if (quiltId) {
-                return await getFileContent({ quiltId, identifier: path });
+            if (parentQuiltId) {
+                return await getFileContent({ quiltId: parentQuiltId, identifier: path });
             }
 
             // Otherwise, try blob_ref for standalone large files
@@ -57,14 +62,14 @@ export function useFileDiff(
 
     // Download new file content (for modified/added files)
     const { data: newContent, isLoading: newLoading, error: newError } = useQuery<string>({
-        queryKey: ['file-content', newMeta?.id || newMeta?.blob_ref || `${quiltId}:${path}`, 'new'],
+        queryKey: ['file-content', newMeta?.id || newMeta?.blob_ref || `${currentQuiltId}:${path}`, 'new'],
         queryFn: async () => {
             if (!newMeta) return '';
 
-            // If quiltId exists, always use quilt API (files are stored in quilt)
+            // If currentQuiltId exists, use quilt API with current commit's quilt
             // The 'id' field in manifest is a quilt-internal reference, not a blob ID
-            if (quiltId) {
-                return await getFileContent({ quiltId, identifier: path });
+            if (currentQuiltId) {
+                return await getFileContent({ quiltId: currentQuiltId, identifier: path });
             }
 
             // Otherwise, try blob_ref for standalone large files
