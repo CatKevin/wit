@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getCommit } from '@/lib/walrus';
-import type { Commit, CommitWithId } from '@/lib/types';
+import type { CommitWithId } from '@/lib/types';
 
 /**
  * Hook to fetch a single commit by blob ID
@@ -8,7 +8,7 @@ import type { Commit, CommitWithId } from '@/lib/types';
  */
 export function useCommit(commitId?: string) {
     return useQuery<CommitWithId>({
-        queryKey: ['commit', commitId],
+        queryKey: ['commit-v2', commitId], // v2 to invalidate old cache
         queryFn: async () => {
             const commit = await getCommit(commitId!);
             return {

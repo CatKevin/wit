@@ -1,6 +1,7 @@
 // Core diff algorithms for comparing commits and files
 
-import type { CommitWithId, CommitDiffChanges, FileChange, CommitFile } from './types';
+import * as Diff from 'diff';
+import type { CommitWithId, CommitDiffChanges, CommitFile, LineDiff } from './types';
 
 /**
  * Compute file-level diff between current commit and parent commit
@@ -11,8 +12,8 @@ export function computeFileLevelDiff(
     currentCommit: CommitWithId,
     parentCommit: CommitWithId | null
 ): CommitDiffChanges {
-    const currentFiles = currentCommit.commit.tree.files || {};
-    const parentFiles = parentCommit?.commit.tree.files || {};
+    const currentFiles = currentCommit?.commit?.tree?.files || {};
+    const parentFiles = parentCommit?.commit?.tree?.files || {};
 
     const changes: CommitDiffChanges = {
         added: [],
@@ -63,7 +64,6 @@ export function computeFileLevelDiff(
  */
 export function getFileRef(
     meta: CommitFile,
-    manifestId?: string,
     quiltId?: string
 ): { type: 'blob' | 'quilt'; id: string; identifier?: string } {
     // Priority 1: Direct blob ID (from manifest.files[].id)
@@ -115,4 +115,73 @@ export function isBinaryFile(path: string): boolean {
 
     const ext = path.substring(path.lastIndexOf('.')).toLowerCase();
     return binaryExtensions.includes(ext);
+}
+
+/**
+ * Compute line-level diff between two file contents
+ * Returns array of LineDiff objects for rendering
+ */
+export function computeLineDiff(
+    oldContent: string,
+    newContent: string
+): LineDiff[] {
+    const result: LineDiff[] = [];
+    const changes = Diff.diffLines(oldContent, newContent);
+
+    let oldLineNumber = 1;
+    let newLineNumber = 1;
+
+    for (const change of changes) {
+        const lines = change.value.split('\n');
+        // Remove last empty line caused by split
+        if (lines[lines.length - 1] === '') {
+            lines.pop();
+        }
+
+        for (const line of lines) {
+            if (change.added) {
+                result.push({
+                    type: 'added',
+                    newLineNumber: newLineNumber++,
+                    content: line,
+                });
+            } else if (change.removed) {
+                result.push({
+                    type: 'removed',
+                    oldLineNumber: oldLineNumber++,
+                    content: line,
+                });
+            } else {
+                result.push({
+                    type: 'context',
+                    oldLineNumber: oldLineNumber++,
+                    newLineNumber: newLineNumber++,
+                    content: line,
+                });
+            }
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Compute line-level statistics from LineDiff array
+ */
+export function computeLineStats(lineDiff: LineDiff[]): {
+    additions: number;
+    deletions: number;
+} {
+    let additions = 0;
+    let deletions = 0;
+
+    for (const line of lineDiff) {
+        if (line.type === 'added') {
+            additions++;
+        } else if (line.type === 'removed') {
+            deletions++;
+        }
+    }
+
+    return { additions, deletions };
 }

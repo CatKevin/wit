@@ -3,7 +3,7 @@ import { GitCommit, User, Calendar, FileCode, Hash, GitBranch, Loader2 } from 'l
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useCommitWithManifest } from '@/hooks/useCommitWithManifest';
-import type { CommitWithId } from '@/lib/types';
+import type { CommitWithId, CommitFile } from '@/lib/types';
 
 interface CommitDetailProps {
     commitWithId: CommitWithId;
@@ -13,7 +13,7 @@ export function CommitDetail({ commitWithId }: CommitDetailProps) {
     const { id, commit } = commitWithId;
 
     // Enrich commit with manifest data if needed
-    const enrichedCommit = useCommitWithManifest(commitWithId);
+    const { data: enrichedCommit, isLoading: isLoadingManifest } = useCommitWithManifest(commitWithId);
 
     // Convert Unix seconds to milliseconds
     const date = new Date(commit.timestamp * 1000);
@@ -24,10 +24,9 @@ export function CommitDetail({ commitWithId }: CommitDetailProps) {
     };
 
     // Get files from enriched commit (may include manifest data)
-    const files = enrichedCommit?.commit.tree.files
+    const files = enrichedCommit?.commit?.tree?.files
         ? Object.entries(enrichedCommit.commit.tree.files)
         : [];
-    const isLoadingManifest = !commit.tree.files && commit.tree.manifest_id && files.length === 0;
 
     return (
         <Card>
@@ -107,7 +106,7 @@ export function CommitDetail({ commitWithId }: CommitDetailProps) {
                                 <span>Loading file list from manifest...</span>
                             </div>
                         ) : files.length > 0 ? (
-                            files.map(([path, meta]) => (
+                            files.map(([path, meta]: [string, CommitFile]) => (
                                 <div
                                     key={path}
                                     className="flex items-center justify-between text-xs py-1 px-2 rounded hover:bg-slate-50"

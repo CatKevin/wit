@@ -25,12 +25,45 @@ export function useCommitDiff(commitId?: string) {
     const { data: parentCommit, isLoading: parentLoading } = useCommit(parentId);
 
     // Enrich both commits with manifest data (fills tree.files if missing)
-    const enrichedCommit = useCommitWithManifest(commit);
-    const enrichedParent = useCommitWithManifest(parentCommit);
+    const enrichCurrentResult = useCommitWithManifest(commit);
+    const enrichParentResult = useCommitWithManifest(parentCommit);
+
+    const enrichedCommit = enrichCurrentResult.data;
+    const enrichedCommitLoading = enrichCurrentResult.isLoading;
+    const enrichedParent = enrichParentResult.data;
+    const enrichedParentLoading = enrichParentResult.isLoading;
+
+    // Debug logging
+    console.log('useCommitDiff:', {
+        commitId,
+        commit,
+        commitLoading,
+        commitError,
+        enrichCurrentResult,
+        enrichedCommit,
+        enrichedCommitLoading,
+        parentId,
+        parentCommit,
+        parentLoading,
+        enrichParentResult,
+        enrichedParent,
+        enrichedParentLoading,
+    });
 
     // Compute file-level diff
     const diff: CommitDiff | null = useMemo(() => {
-        if (!enrichedCommit) return null;
+        // Wait until enrichedCommit is fully loaded with tree.files
+        console.log('useMemo diff calculation:', {
+            enrichedCommit,
+            hasCommit: !!enrichedCommit?.commit,
+            hasTree: !!enrichedCommit?.commit?.tree,
+            treeStructure: enrichedCommit?.commit?.tree,
+        });
+
+        if (!enrichedCommit?.commit?.tree) {
+            console.warn('Diff calculation aborted: missing commit.tree');
+            return null;
+        }
 
         const changes = computeFileLevelDiff(enrichedCommit, enrichedParent || null);
         const basicStats = computeFileStats(changes);
@@ -49,7 +82,7 @@ export function useCommitDiff(commitId?: string) {
 
     return {
         diff,
-        isLoading: commitLoading || (!!parentId && parentLoading),
+        isLoading: commitLoading || (!!parentId && parentLoading) || enrichedCommitLoading || enrichedParentLoading,
         error: commitError,
     };
 }

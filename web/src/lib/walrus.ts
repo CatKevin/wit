@@ -8,7 +8,8 @@ export interface ManifestFile {
     size: number;
     mode: string;
     mtime: number;
-    blob_ref?: string; // For large files stored as separate blobs
+    id?: string; // Walrus blob ID for individual files
+    blob_ref?: string; // Legacy/alternative blob reference
 }
 
 export interface Manifest {
@@ -66,4 +67,15 @@ export async function getCommit(blobId: string): Promise<any> {
         throw new Error(`Failed to fetch commit ${blobId}: ${response.status} ${response.statusText}`);
     }
     return response.json();
+}
+
+// Generic file content fetcher - supports both blob and quilt references
+export async function getFileContent(fileRef: { blobId?: string; quiltId?: string; identifier?: string }): Promise<string> {
+    if (fileRef.blobId) {
+        return getBlobText(fileRef.blobId);
+    } else if (fileRef.quiltId && fileRef.identifier) {
+        return getFileFromQuiltAsText(fileRef.quiltId, fileRef.identifier);
+    } else {
+        throw new Error('Invalid file reference - must provide either blobId or (quiltId + identifier)');
+    }
 }
