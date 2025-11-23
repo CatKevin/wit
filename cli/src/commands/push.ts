@@ -10,7 +10,7 @@ import {ensureDirForFile, readBlob} from '../lib/fs';
 import {readCommitById, readCommitIdMap, readHeadRefPath, readRef, writeCommitIdMap, idToFileName, type CommitObject} from '../lib/state';
 import {readRepoConfig, writeRepoConfig, writeRemoteState, requireWitDir, writeRemoteRef} from '../lib/repo';
 import {WalrusService, resolveWalrusConfig} from '../lib/walrus';
-import {loadSigner} from '../lib/keys';
+import {loadSigner, checkResources} from '../lib/keys';
 import {fetchRepositoryStateWithRetry, createRepository, updateRepositoryHead} from '../lib/suiRepo';
 import {ManifestSchema, type Manifest} from '../lib/schema';
 
@@ -27,6 +27,9 @@ export async function pushAction(): Promise<void> {
   if (!headId) {
     throw new Error('No commits to push. Run `wit commit` first.');
   }
+  const signerInfo = await loadSigner();
+  await ensureAuthorOrSetDefault(witPath, repoCfg, signerInfo.address);
+  await assertResourcesOk(signerInfo.address);
 
   const headCommit = await readCommitById(witPath, headId);
   const computedRoot = computeRootHash(headCommit.tree.files);
@@ -39,7 +42,6 @@ export async function pushAction(): Promise<void> {
 
   const resolved = await resolveWalrusConfig(process.cwd());
   const suiClient = new SuiClient({url: resolved.suiRpcUrl});
-  const signerInfo = await loadSigner();
 
   let repoId = repoCfg.repo_id;
   if (!repoId) {
@@ -285,4 +287,37 @@ async function uploadCommitSnapshot(
 async function cacheJson(filePath: string, content: string): Promise<void> {
   await ensureDirForFile(filePath);
   await fs.writeFile(filePath, content, 'utf8');
+}
+
+async function ensureAuthorOrSetDefault(witPath: string, repoCfg: any, signerAddress: string): Promise<void> {
+  const current = (repoCfg.author || '').trim().toLowerCase();
+  const signer = signerAddress.toLowerCase();
+  if (!current || current === 'unknown') {
+    const next = {...repoCfg, author: signerAddress};
+    await writeRepoConfig(witPath, next);
+    // eslint-disable-next-line no-console
+    console.log(colors.cyan(`Author set to active address ${signerAddress}`));
+    return;
+  }
+  if (current !== signer) {
+    // eslint-disable-next-line no-console
+    console.warn(`Warning: author (${repoCfg.author}) differs from signer (${signerAddress}). Push will use signer.`);
+  }
+}
+
+async function assertResourcesOk(address: string): Promise<void> {
+  const res = await checkResources(address);
+  if (res.error) {
+    throw new Error(`Failed to query balances: ${res.error}`);
+  }
+  if (res.walError) {
+    throw new Error(`Failed to query WAL balance: ${res.walError}. Please fund or switch account.`);
+  }
+  if (res.hasMinSui === false) {
+    throw new Error(`Insufficient SUI balance (need at least ${res.minSui} MIST). Please fund or switch account.`);
+  }
+  if (res.hasMinWal === false) {
+    // eslint-disable-next-line no-console
+    console.warn(`Warning: WAL balance below threshold (${res.minWal} min).`);
+  }
 }
