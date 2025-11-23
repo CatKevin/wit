@@ -17,9 +17,10 @@ export const ManifestSchema = z.object({
 
 export const CommitSchema = z.object({
   tree: z.object({
-    quilt_id: z.string().min(1),
-    manifest_id: z.string().min(1),
+    quilt_id: z.string().min(1).nullable(),
+    manifest_id: z.string().min(1).nullable(),
     root_hash: z.string().min(1),
+    files: z.record(fileMeta).optional(),
   }),
   parent: z.string().min(1).nullable(),
   author: z.string().min(1),
