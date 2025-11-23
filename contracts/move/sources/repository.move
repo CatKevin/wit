@@ -6,7 +6,7 @@ module wit_repository::repository {
 
     /// Struct representing a decentralized repository.
     /// It holds the metadata and the current state of the repository.
-    public struct Repository has key {
+    public struct Repository has key, store {
         id: UID,
         /// The address of the repository owner.
         owner: address,
@@ -77,7 +77,7 @@ module wit_repository::repository {
             description,
         };
         // Share the object so it can be accessed by collaborators and the public.
-        transfer::share_object(repo);
+        transfer::public_share_object(repo);
     }
 
     /// Adds a collaborator to the repository.
@@ -158,6 +158,23 @@ module wit_repository::repository {
             version: repo.version,
             parent: parent_commit,
         });
+    }
+
+    /// Updates the Seal Policy ID for the repository.
+    /// This allows changing the encryption policy (e.g., for key rotation or access control updates).
+    /// Only the owner or an existing collaborator can update the policy.
+    ///
+    /// # Arguments
+    /// * `repo` - The mutable reference to the repository.
+    /// * `new_policy_id` - The new Seal Policy ID (optional).
+    /// * `ctx` - The transaction context.
+    public fun set_seal_policy(
+        repo: &mut Repository,
+        new_policy_id: Option<vector<u8>>,
+        ctx: &TxContext,
+    ) {
+        assert!(is_owner_or_collaborator(repo, ctx.sender()), ENotAuthorized);
+        repo.seal_policy_id = new_policy_id;
     }
 
     // === Internal Helper Functions ===
