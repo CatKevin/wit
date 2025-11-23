@@ -42,6 +42,7 @@ export async function pushAction(): Promise<void> {
 
   const resolved = await resolveWalrusConfig(process.cwd());
   const suiClient = new SuiClient({url: resolved.suiRpcUrl});
+  let createdRepo = false;
 
   let repoId = repoCfg.repo_id;
   if (!repoId) {
@@ -51,6 +52,7 @@ export async function pushAction(): Promise<void> {
       sealPolicyId: repoCfg.seal_policy_id,
     });
     repoCfg.repo_id = repoId;
+    createdRepo = true;
     await writeRepoConfig(witPath, repoCfg);
     // eslint-disable-next-line no-console
     console.log(colors.green(`Created on-chain repository ${repoId}`));
@@ -140,6 +142,10 @@ export async function pushAction(): Promise<void> {
   console.log(`Manifest: ${colors.hash(lastManifestId)}`);
   // eslint-disable-next-line no-console
   console.log(`Quilt: ${colors.hash(lastQuiltId)}`);
+  if (createdRepo) {
+    // eslint-disable-next-line no-console
+    console.log(colors.cyan('Initial push: repository created on chain and remote state recorded.'));
+  }
 }
 
 async function collectChain(
