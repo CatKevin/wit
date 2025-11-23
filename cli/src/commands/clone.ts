@@ -73,18 +73,13 @@ export async function cloneAction(repoId: string): Promise<void> {
 
   // Fetch files by id
   const entries = Object.entries(manifest.files);
-  const ids = entries.map(([, meta]) => {
-    if (!meta.id) throw new Error('Manifest entry missing Walrus file id.');
-    return meta.id;
-  });
   // eslint-disable-next-line no-console
-  console.log(colors.cyan(`Downloading ${ids.length} files from quilt...`));
-  const files = await walrusSvc.readBlobs(ids, 8);
+  console.log(colors.cyan(`Downloading ${entries.length} files from Walrus...`));
 
   const index: Index = {};
   for (let i = 0; i < entries.length; i += 1) {
     const [rel, meta] = entries[i];
-    const data = Buffer.from(files[i]);
+    const data = await fetchFileBytes(walrusSvc, manifest, rel, meta);
     const hash = sha256Base64(data);
     if (hash !== meta.hash || data.length !== meta.size) {
       throw new Error(`Hash/size mismatch for ${rel}`);
@@ -120,6 +115,36 @@ export async function cloneAction(repoId: string): Promise<void> {
   console.log(`Manifest: ${colors.hash(onchain.headManifest)}`);
   // eslint-disable-next-line no-console
   console.log(`Quilt: ${colors.hash(onchain.headQuilt)}`);
+}
+
+async function fetchFileBytes(
+  walrusSvc: WalrusService,
+  manifest: Manifest,
+  rel: string,
+  meta: {id?: string; hash: string; size: number}
+): Promise<Buffer> {
+  // Prefer quilt fetch when quilt_id is present; fallback to direct file id
+  if (manifest.quilt_id) {
+    try {
+      const bytes = await walrusSvc.readQuiltFile(manifest.quilt_id, rel);
+      return Buffer.from(bytes);
+    } catch (err) {
+      // fallback to direct id path below
+    }
+  }
+
+  if (meta.id) {
+    const files = await walrusSvc.getClient().getFiles({ids: [meta.id]});
+    const file = files[0];
+    const data = Buffer.from(await file.bytes());
+    const tags = await file.getTags();
+    if (tags?.hash && tags.hash !== meta.hash) {
+      throw new Error(`Tag hash mismatch for ${rel}`);
+    }
+    return data;
+  }
+
+  throw new Error(`Manifest entry missing file id for ${rel}`);
 }
 
 async function ensureLayout(cwd: string, repoId: string): Promise<string> {

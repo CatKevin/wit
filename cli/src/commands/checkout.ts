@@ -135,17 +135,11 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any): Promise<
     }
   }
   if (!missing.length) return;
-  const ids = missing.map(({meta}) => meta.id).filter(Boolean);
-  if (ids.length !== missing.length) {
-    throw new Error('Missing blobs and manifest entries lack Walrus ids; cannot restore.');
-  }
   const walrusSvc = await WalrusService.fromRepo();
   // eslint-disable-next-line no-console
-  console.log(colors.cyan(`Fetching ${ids.length} missing blobs from Walrus...`));
-  const files = await walrusSvc.readBlobs(ids, 8);
-  for (let i = 0; i < missing.length; i += 1) {
-    const {rel, meta} = missing[i];
-    const data = Buffer.from(files[i]);
+  console.log(colors.cyan(`Fetching ${missing.length} missing blobs from Walrus...`));
+  for (const {rel, meta} of missing) {
+    const data = await fetchFileBytes(walrusSvc, manifest, rel, meta);
     const hash = sha256Base64(data);
     if (hash !== meta.hash || data.length !== meta.size) {
       throw new Error(`Downloaded blob mismatch for ${rel}`);
@@ -158,4 +152,30 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any): Promise<
 
 function manifestIdToFile(id: string): string {
   return id.replace(/\//g, '_').replace(/\+/g, '-');
+}
+
+async function fetchFileBytes(
+  walrusSvc: WalrusService,
+  manifest: any,
+  rel: string,
+  meta: {id?: string; hash: string; size: number}
+): Promise<Buffer> {
+  if (manifest.quilt_id) {
+    try {
+      const bytes = await walrusSvc.readQuiltFile(manifest.quilt_id, rel);
+      return Buffer.from(bytes);
+    } catch {
+      // fallback
+    }
+  }
+  if (meta.id) {
+    const files = await walrusSvc.getClient().getFiles({ids: [meta.id]});
+    const data = Buffer.from(await files[0].bytes());
+    const tags = await files[0].getTags();
+    if (tags?.hash && tags.hash !== meta.hash) {
+      throw new Error(`Tag hash mismatch for ${rel}`);
+    }
+    return data;
+  }
+  throw new Error(`Manifest entry missing Walrus file id for ${rel}`);
 }
