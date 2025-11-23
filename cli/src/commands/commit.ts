@@ -11,6 +11,7 @@ import {
   readRef,
   writeCommitIdMap,
 } from '../lib/state';
+import {readRemoteRef} from '../lib/repo';
 import {computeRootHash} from '../lib/manifest';
 import {colors} from '../lib/ui';
 
@@ -76,17 +77,34 @@ export async function logAction(): Promise<void> {
   const witPath = await requireWitDir();
   const headRefPath = await readHeadRefPath(witPath);
   const head = await readRef(headRefPath);
-  if (!head) {
+  const remoteHead = await readRemoteRef(witPath);
+
+  const seen = new Set<string>();
+  if (head) {
     // eslint-disable-next-line no-console
-    console.log('No commits yet.');
-    return;
+    console.log(colors.header('Local (HEAD):'));
+    let currentId: string | null = head;
+    while (currentId) {
+      const commit = await readCommit(witPath, currentId);
+      printCommit(currentId, commit);
+      seen.add(currentId);
+      currentId = commit.parent;
+    }
+  } else {
+    // eslint-disable-next-line no-console
+    console.log('No local commits yet.');
   }
 
-  let currentId: string | null = head;
-  while (currentId) {
-    const commit = await readCommit(witPath, currentId);
-    printCommit(currentId, commit);
-    currentId = commit.parent;
+  if (remoteHead && (!head || remoteHead !== head)) {
+    // eslint-disable-next-line no-console
+    console.log(colors.header('Remote (remotes/main):'));
+    let currentId: string | null = remoteHead;
+    while (currentId && !seen.has(currentId)) {
+      const commit = await readCommit(witPath, currentId);
+      printCommit(currentId, commit);
+      seen.add(currentId);
+      currentId = commit.parent;
+    }
   }
 }
 

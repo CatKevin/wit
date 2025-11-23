@@ -62,6 +62,11 @@ export async function fetchAction(): Promise<void> {
   }
   await cacheJson(path.join(witPath, 'objects', 'commits', `${idToFileName(onchain.headCommit)}.json`), commitBuf.toString('utf8'));
 
+  // Download commit chain (and manifests) for history
+  const map = await readCommitIdMapSafe(witPath);
+  await downloadCommitChain(walrusSvc, onchain.headCommit, witPath, map);
+  await writeCommitIdMap(witPath, map);
+
   // Update remote refs/state
   await writeRemoteRef(witPath, onchain.headCommit);
   await writeRemoteState(witPath, {
@@ -71,11 +76,6 @@ export async function fetchAction(): Promise<void> {
     head_quilt: onchain.headQuilt,
     version: onchain.version,
   });
-
-  // Update commit_id_map
-  const map = await readCommitIdMapSafe(witPath);
-  map[onchain.headCommit] = onchain.headCommit;
-  await writeCommitIdMap(witPath, map);
 
   // eslint-disable-next-line no-console
   console.log(colors.green('Fetch complete (worktree unchanged).'));
@@ -106,4 +106,69 @@ async function readCommitIdMapSafe(witPath: string): Promise<Record<string, stri
   } catch {
     return {};
   }
+}
+
+async function downloadCommitChain(
+  walrusSvc: WalrusService,
+  startId: string,
+  witPath: string,
+  map: Record<string, string | null>
+): Promise<void> {
+  const seen = new Set<string>();
+  let current: string | null = startId;
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const buf = Buffer.from(await walrusSvc.readBlob(current));
+    const commit = parseRemoteCommit(buf);
+    await cacheJson(path.join(witPath, 'objects', 'commits', `${idToFileName(current)}.json`), buf.toString('utf8'));
+    if (!map[current]) {
+      map[current] = current;
+    }
+    if (commit.tree?.manifest_id) {
+      await ensureManifestCached(walrusSvc, witPath, commit.tree.manifest_id, commit.tree.root_hash);
+    }
+    current = commit.parent;
+  }
+}
+
+async function ensureManifestCached(
+  walrusSvc: WalrusService,
+  witPath: string,
+  manifestId: string,
+  expectedRoot: string
+): Promise<void> {
+  const file = path.join(witPath, 'objects', 'manifests', `${idToFileName(manifestId)}.json`);
+  try {
+    await fs.access(file);
+    const raw = await fs.readFile(file, 'utf8');
+    const manifest = ManifestSchema.parse(JSON.parse(raw));
+    const computed = computeRootHash(
+      Object.fromEntries(
+        Object.entries(manifest.files).map(([rel, meta]) => [
+          rel,
+          {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+        ])
+      )
+    );
+    if (computed === expectedRoot) return;
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') {
+      // fall through to refetch
+    }
+  }
+  // Fetch from Walrus
+  const buf = Buffer.from(await walrusSvc.readBlob(manifestId));
+  const manifest = ManifestSchema.parse(JSON.parse(buf.toString('utf8')));
+  const computed = computeRootHash(
+    Object.fromEntries(
+      Object.entries(manifest.files).map(([rel, meta]) => [
+        rel,
+        {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+      ])
+    )
+  );
+  if (computed !== expectedRoot) {
+    throw new Error('Fetched manifest root_hash mismatch; aborting.');
+  }
+  await cacheJson(file, canonicalStringify(manifest));
 }
