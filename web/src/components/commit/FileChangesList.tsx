@@ -160,7 +160,6 @@ function FileChangeCard({ change, isExpanded, onToggle, currentQuiltId, parentQu
                         isLoading={isLoading}
                         error={error}
                         isBinary={isBinary}
-                        changeType={change.type}
                     />
                 </div>
             )}

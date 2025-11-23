@@ -8,7 +8,6 @@ interface DiffViewerProps {
     isLoading?: boolean;
     error?: Error | null;
     isBinary?: boolean;
-    changeType?: 'added' | 'modified' | 'deleted'; // Optional: to optimize display
 }
 
 /**
@@ -20,13 +19,8 @@ interface DiffViewerProps {
  * - White background for context lines
  * - Line numbers on both sides
  */
-export function DiffViewer({ lineDiff, fileName, isLoading, error, isBinary, changeType }: DiffViewerProps) {
-    // Determine if we need both line number columns
-    // For 'added' files: only show new line numbers
-    // For 'deleted' files: only show old line numbers
-    // For 'modified' files or auto-detect: show both
-    const showOldLineNumbers = changeType !== 'added';
-    const showNewLineNumbers = changeType !== 'deleted';
+export function DiffViewer({ lineDiff, fileName, isLoading, error, isBinary }: DiffViewerProps) {
+
     if (isLoading) {
         return (
             <Card>
@@ -79,28 +73,29 @@ export function DiffViewer({ lineDiff, fileName, isLoading, error, isBinary, cha
     }
 
     return (
-        <Card className="overflow-hidden">
-            <CardHeader className="bg-slate-50 border-b py-2 px-4">
-                <div className="font-mono text-sm text-slate-700">{fileName}</div>
+        <Card className="overflow-hidden border border-gray-300 rounded-md">
+            <CardHeader className="bg-gray-50 border-b border-gray-300 py-2 px-3">
+                <div className="font-mono text-xs text-gray-600">{fileName}</div>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 bg-white">
                 <div className="overflow-x-auto">
-                    <table className="w-full font-mono text-xs">
+                    <table className="w-full border-collapse">
                         <tbody>
                             {lineDiff.map((line, index) => {
-                                const bgColor =
+                                // Unified background color for the entire row
+                                const rowBg =
                                     line.type === 'added'
-                                        ? 'bg-green-50'
+                                        ? 'bg-green-50 hover:bg-green-100'
                                         : line.type === 'removed'
-                                        ? 'bg-red-50'
-                                        : 'bg-white';
+                                        ? 'bg-red-50 hover:bg-red-100'
+                                        : 'hover:bg-gray-50';
 
-                                const textColor =
+                                const contentColor =
                                     line.type === 'added'
                                         ? 'text-green-800'
                                         : line.type === 'removed'
                                         ? 'text-red-800'
-                                        : 'text-slate-700';
+                                        : 'text-gray-700';
 
                                 const prefix =
                                     line.type === 'added'
@@ -110,29 +105,25 @@ export function DiffViewer({ lineDiff, fileName, isLoading, error, isBinary, cha
                                         : ' ';
 
                                 return (
-                                    <tr key={index} className={`${bgColor} hover:bg-opacity-80 transition-colors`}>
-                                        {/* Old line number - only show if needed */}
-                                        {showOldLineNumbers && (
-                                            <td className="w-12 px-2 py-0.5 text-right text-slate-400 select-none border-r border-slate-200">
-                                                {line.oldLineNumber || ''}
-                                            </td>
-                                        )}
-
-                                        {/* New line number - only show if needed */}
-                                        {showNewLineNumbers && (
-                                            <td className="w-12 px-2 py-0.5 text-right text-slate-400 select-none border-r border-slate-200">
-                                                {line.newLineNumber || ''}
-                                            </td>
-                                        )}
-
-                                        {/* Prefix (+/-/ ) */}
-                                        <td className={`w-6 px-1 py-0.5 text-center select-none ${textColor} font-bold`}>
-                                            {prefix}
+                                    <tr key={index} className={`${rowBg} transition-colors`}>
+                                        {/* Line numbers */}
+                                        <td className="select-none text-right align-top font-mono text-gray-500 pl-3 pr-2"
+                                            style={{ fontSize: '12px', width: '45px', minWidth: '45px' }}>
+                                            {line.oldLineNumber || ''}
+                                        </td>
+                                        <td className="select-none text-right align-top font-mono text-gray-500 pr-3 border-r border-gray-300"
+                                            style={{ fontSize: '12px', width: '45px', minWidth: '45px' }}>
+                                            {line.newLineNumber || ''}
                                         </td>
 
-                                        {/* Line content */}
-                                        <td className={`px-2 py-0.5 ${textColor} whitespace-pre-wrap break-all`}>
-                                            {line.content}
+                                        {/* +/- sign closer to separator */}
+                                        <td className="pl-2 pr-1 text-center font-mono" style={{ fontSize: '12px', width: '20px' }}>
+                                            <span className={`select-none ${contentColor} font-semibold`}>{prefix}</span>
+                                        </td>
+
+                                        {/* Code content separated from +/- sign */}
+                                        <td className="pl-2 pr-4 font-mono" style={{ fontSize: '12px', lineHeight: '20px' }}>
+                                            <span className={contentColor}>{line.content || ' '}</span>
                                         </td>
                                     </tr>
                                 );
