@@ -106,7 +106,7 @@ export async function cloneAction(repoId: string): Promise<void> {
     version: onchain.version,
   });
   const commitMap = await readCommitIdMapSafe(witPath);
-  commitMap[onchain.headCommit] = onchain.headCommit;
+  await downloadCommitChain(walrusSvc, onchain.headCommit, witPath, commitMap);
   await writeCommitIdMap(witPath, commitMap);
 
   // eslint-disable-next-line no-console
@@ -199,5 +199,25 @@ async function readCommitIdMapSafe(witPath: string): Promise<Record<string, stri
     return await readCommitIdMap(witPath);
   } catch {
     return {};
+  }
+}
+
+async function downloadCommitChain(
+  walrusSvc: WalrusService,
+  startId: string,
+  witPath: string,
+  map: Record<string, string | null>
+): Promise<void> {
+  const seen = new Set<string>();
+  let current: string | null = startId;
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const buf = Buffer.from(await walrusSvc.readBlob(current));
+    const commit = parseRemoteCommit(buf);
+    await cacheJson(path.join(witPath, 'objects', 'commits', `${idToFileName(current)}.json`), buf.toString('utf8'));
+    if (!map[current]) {
+      map[current] = current;
+    }
+    current = commit.parent;
   }
 }
