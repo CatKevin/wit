@@ -5,6 +5,7 @@ import {checkoutAction} from './checkout';
 import {diffAction} from './diff';
 import {makeStubAction} from './stub';
 import {addAction, resetAction, statusAction} from './workspace';
+import {pushAction} from './push';
 import {colorsEnabled, setColorsEnabled} from '../lib/ui';
 import {accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction} from './account';
 import {pushBlobAction, pullBlobAction} from './walrusBlob';
@@ -69,7 +70,7 @@ export function registerCommands(program: Command): void {
   program
     .command('push')
     .description('Upload manifest/quilt/commit to Walrus and update Sui head')
-    .action(makeStubAction('push'));
+    .action(pushAction);
 
   program
     .command('clone <repo_id>')
