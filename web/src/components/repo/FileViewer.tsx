@@ -1,17 +1,14 @@
 import { Editor } from '@monaco-editor/react';
-import { useFileContent } from '@/hooks/useFile';
-import { Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 
 
 interface FileViewerProps {
-    blobId: string;
-    filename: string;
-    expectedHash?: string;
+    file: { path: string; content: string } | null;
+    loading?: boolean;
+    error?: string;
 }
 
-export function FileViewer({ blobId, filename }: FileViewerProps) {
-    const { data: content, isLoading, error } = useFileContent(blobId);
-
+export function FileViewer({ file, loading, error }: FileViewerProps) {
     // Simple language detection
     const getLanguage = (fname: string) => {
         const ext = fname.split('.').pop()?.toLowerCase();
@@ -31,54 +28,61 @@ export function FileViewer({ blobId, filename }: FileViewerProps) {
         }
     };
 
-    if (isLoading) {
+    if (!file && !loading && !error) {
         return (
-            <div className="flex items-center justify-center h-64 text-slate-500">
-                <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                Loading content...
+            <div className="flex items-center justify-center h-[600px] text-slate-400">
+                <div className="text-center">
+                    <p className="text-sm">Select a file to view</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[600px]">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400 mb-2" />
+                <p className="text-sm text-slate-500">Loading file content...</p>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="flex flex-col items-center justify-center h-64 text-red-500">
+            <div className="flex flex-col items-center justify-center h-[600px] text-red-500">
                 <AlertTriangle className="h-8 w-8 mb-2" />
-                <p>Failed to load file content.</p>
-                <p className="text-sm text-slate-500 mt-1">Blob ID: {blobId}</p>
+                <p className="text-sm font-semibold">Failed to load file content</p>
+                <p className="text-xs text-slate-500 mt-1">{error}</p>
             </div>
         );
     }
 
-    // TODO: Verify hash here if needed (requires crypto lib in browser)
+    if (!file) {
+        return (
+            <div className="flex items-center justify-center h-[600px] text-slate-400">
+                <p className="text-sm">No file selected</p>
+            </div>
+        );
+    }
+
+    const language = getLanguage(file.path);
 
     return (
-        <div className="border border-slate-200 rounded-md overflow-hidden bg-white">
-            <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 flex justify-between items-center text-xs text-slate-500">
-                <div className="flex items-center gap-2">
-                    <span className="font-mono">{blobId.slice(0, 8)}...</span>
-                    {/* Placeholder for hash verification */}
-                    <span className="flex items-center text-green-600 gap-1" title="Hash matches manifest">
-                        <CheckCircle className="h-3 w-3" /> Verified
-                    </span>
-                </div>
-                <div>
-                    {content?.length || 0} bytes
-                </div>
-            </div>
-            <div className="h-[600px]">
-                <Editor
-                    height="100%"
-                    defaultLanguage={getLanguage(filename)}
-                    value={content}
-                    options={{
-                        readOnly: true,
-                        minimap: { enabled: false },
-                        scrollBeyondLastLine: false,
-                        fontSize: 14,
-                    }}
-                />
-            </div>
+        <div className="h-[600px] overflow-hidden">
+            <Editor
+                height="100%"
+                language={language}
+                value={file.content}
+                theme="vs-dark"
+                options={{
+                    readOnly: true,
+                    minimap: { enabled: true },
+                    fontSize: 14,
+                    lineNumbers: 'on',
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                }}
+            />
         </div>
     );
 }

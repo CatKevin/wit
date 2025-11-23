@@ -28,6 +28,16 @@ export async function getBlob(blobId: string): Promise<Blob> {
     return response.blob();
 }
 
+// Read file from Quilt using quilt ID + file identifier (path)
+// API Format: GET $AGGREGATOR/v1/blobs/by-quilt-id/<quilt-id>/<identifier>
+export async function getFileFromQuilt(quiltId: string, identifier: string): Promise<Blob> {
+    const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/by-quilt-id/${quiltId}/${identifier}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch file ${identifier} from quilt ${quiltId}: ${response.status} ${response.statusText}`);
+    }
+    return response.blob();
+}
+
 // Read manifest (JSON blob) via Aggregator
 export async function getManifest(blobId: string): Promise<Manifest> {
     const response = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/${blobId}`);
@@ -40,5 +50,11 @@ export async function getManifest(blobId: string): Promise<Manifest> {
 // Read blob as text via Aggregator
 export async function getBlobText(blobId: string): Promise<string> {
     const blob = await getBlob(blobId);
+    return blob.text();
+}
+
+// Read file from Quilt as text
+export async function getFileFromQuiltAsText(quiltId: string, identifier: string): Promise<string> {
+    const blob = await getFileFromQuilt(quiltId, identifier);
     return blob.text();
 }

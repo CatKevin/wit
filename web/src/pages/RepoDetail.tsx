@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useRepository } from '@/hooks/useRepository';
 import { useManifest } from '@/hooks/useManifest';
+import { useFileContent, type FileRef } from '@/hooks/useFile';
 import { FileTree } from '@/components/repo/FileTree';
 import { FileViewer } from '@/components/repo/FileViewer';
 import { Button } from '@/components/ui/button';
@@ -14,11 +15,14 @@ export default function RepoDetail() {
     const { id } = useParams<{ id: string }>();
     const { data: repo, isLoading: repoLoading, error: repoError } = useRepository(id!);
 
-    // State for file navigation
-    const [selectedFile, setSelectedFile] = useState<{ path: string; blobId: string } | null>(null);
+    // State for file navigation - now supports both blob and quilt files
+    const [selectedFile, setSelectedFile] = useState<{ path: string; fileRef: FileRef } | null>(null);
 
     // Fetch manifest only if we have a head_manifest
     const { data: manifest, isLoading: manifestLoading, error: manifestError } = useManifest(repo?.head_manifest);
+
+    // Fetch file content based on selected file reference
+    const { data: fileContent, isLoading: fileLoading, error: fileError } = useFileContent(selectedFile?.fileRef);
 
     if (repoLoading) {
         return (
@@ -93,7 +97,20 @@ export default function RepoDetail() {
                                     ) : manifest ? (
                                         <FileTree
                                             manifest={manifest}
-                                            onSelectFile={(path, blobId) => setSelectedFile({ path, blobId })}
+                                            onSelectFile={(path, blobId) => {
+                                                // Check if file has dedicated blob_ref or is in quilt
+                                                const fileMetadata = manifest.files[path];
+                                                if (fileMetadata?.blob_ref) {
+                                                    // Standalone blob
+                                                    setSelectedFile({ path, fileRef: { blobId: fileMetadata.blob_ref } });
+                                                } else if (manifest.quilt_id) {
+                                                    // File in quilt
+                                                    setSelectedFile({ path, fileRef: { quiltId: manifest.quilt_id, identifier: path } });
+                                                } else {
+                                                    // Fallback
+                                                    setSelectedFile({ path, fileRef: { blobId } });
+                                                }
+                                            }}
                                             selectedPath={selectedFile?.path}
                                         />
                                     ) : (
@@ -133,8 +150,9 @@ export default function RepoDetail() {
                                         / {selectedFile.path}
                                     </div>
                                     <FileViewer
-                                        blobId={selectedFile.blobId}
-                                        filename={selectedFile.path}
+                                        file={selectedFile ? { path: selectedFile.path, content: fileContent || '' } : null}
+                                        loading={fileLoading}
+                                        error={fileError ? String(fileError) : undefined}
                                     />
                                 </div>
                             ) : (
