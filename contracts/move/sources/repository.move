@@ -78,21 +78,24 @@ module wit_repository::repository {
         new_policy_id: Option<vector<u8>>,
     }
 
+    /// Event emitted when repository information (name, description) is updated.
+    public struct RepoInfoUpdatedEvent has copy, drop {
+        repo_id: address,
+        name: vector<u8>,
+        description: vector<u8>,
+    }
+
     // === Errors ===
     const ENotAuthorized: u64 = 1;
-    const EVersionMismatch: u64 = 2;
-    const EParentMismatch: u64 = 3;
 
-    // ... (existing functions)
+
 
     /// Updates the seal policy ID for the repository.
-    /// Only the owner or an existing collaborator can update the policy.
-    ///
-    /// # Arguments
-    /// * `repo` - The mutable reference to the repository.
-    /// * `new_policy_id` - The new Seal Policy ID.
-    /// * `ctx` - The transaction context.
-    public fun set_seal_policy(repo: &mut Repository, new_policy_id: Option<vector<u8>>, ctx: &TxContext) {
+    public fun set_seal_policy(
+        repo: &mut Repository,
+        new_policy_id: Option<vector<u8>>,
+        ctx: &TxContext,
+    ) {
         assert!(is_owner_or_collaborator(repo, ctx.sender()), ENotAuthorized);
         repo.seal_policy_id = new_policy_id;
 
@@ -101,6 +104,37 @@ module wit_repository::repository {
             new_policy_id,
         });
     }
+
+    /// Updates the repository name and description.
+    /// Only the owner can update this information.
+    ///
+    /// # Arguments
+    /// * `repo` - The mutable reference to the repository.
+    /// * `name` - The new name.
+    /// * `description` - The new description.
+    /// * `ctx` - The transaction context.
+    public fun update_repo_info(
+        repo: &mut Repository,
+        name: vector<u8>,
+        description: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        assert!(ctx.sender() == repo.owner, ENotAuthorized);
+        repo.name = name;
+        repo.description = description;
+
+        event::emit(RepoInfoUpdatedEvent {
+            repo_id: object::uid_to_address(&repo.id),
+            name,
+            description,
+        });
+    }
+    const EVersionMismatch: u64 = 2;
+    const EParentMismatch: u64 = 3;
+
+
+
+
 
     /// Creates a new repository and shares it as a shared object.
     ///
