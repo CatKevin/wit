@@ -13,6 +13,8 @@ import {
   pullQuiltAction,
   pushQuiltLegacyAction,
   pullQuiltLegacyAction,
+  listQuiltIdentifiersCommand,
+  catQuiltFileById,
 } from './walrusQuilt';
 
 export function registerCommands(program: Command): void {
@@ -128,6 +130,16 @@ export function registerCommands(program: Command): void {
       const {bytes} = await fetchQuiltFile(manifestPath, identifier);
       process.stdout.write(Buffer.from(bytes));
     });
+
+  program
+    .command('quilt-ls <quilt_id>')
+    .description('List identifiers inside a quilt (no manifest needed)')
+    .action((quiltId: string) => listQuiltIdentifiersCommand(quiltId));
+
+  program
+    .command('quilt-cat-id <quilt_id> <identifier>')
+    .description('Fetch a single file from a quilt by quilt_id + identifier (no manifest needed)')
+    .action((quiltId: string, identifier: string) => catQuiltFileById(quiltId, identifier));
 
   program
     .command('push-quilt-legacy <dir>')

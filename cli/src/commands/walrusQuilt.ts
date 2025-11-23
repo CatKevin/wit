@@ -176,6 +176,26 @@ function findEntry(manifest: Manifest, identifier: string) {
   return null;
 }
 
+// Direct quilt access (no manifest): list identifiers and fetch a single file
+export async function listQuiltIdentifiersCommand(quiltId: string): Promise<void> {
+  const ids = await (await import('../lib/quilt.js')).listQuiltIdentifiers(quiltId);
+  if (!ids.length) {
+    // eslint-disable-next-line no-console
+    console.log('No identifiers found in quilt.');
+    return;
+  }
+  for (const id of ids) {
+    // eslint-disable-next-line no-console
+    console.log(id);
+  }
+}
+
+export async function catQuiltFileById(quiltId: string, identifier: string): Promise<void> {
+  const {fetchQuiltFileById} = await import('../lib/quilt.js');
+  const {bytes} = await fetchQuiltFileById(quiltId, pathToPosix(identifier));
+  process.stdout.write(Buffer.from(bytes));
+}
+
 async function collectFiles(baseDir: string): Promise<string[]> {
   const result: string[] = [];
   async function walk(cur: string, relPrefix = ''): Promise<void> {
