@@ -40,8 +40,7 @@ export async function fetchAction(): Promise<void> {
   }
 
   // Download manifest and commit for validation/cache
-  const manifestBuf = Buffer.from(await walrusSvc.readBlob(onchain.headManifest));
-  const manifest = ManifestSchema.parse(JSON.parse(manifestBuf.toString('utf8')));
+  const manifest = await loadManifestCached(walrusSvc, witPath, onchain.headManifest);
   const computedRoot = computeRootHash(
     Object.fromEntries(
       Object.entries(manifest.files).map(([rel, meta]) => [
@@ -53,14 +52,11 @@ export async function fetchAction(): Promise<void> {
   if (computedRoot !== manifest.root_hash) {
     throw new Error('Manifest root_hash mismatch; aborting fetch.');
   }
-  await cacheJson(path.join(witPath, 'objects', 'manifests', `${idToFileName(onchain.headManifest)}.json`), manifestBuf.toString('utf8'));
 
-  const commitBuf = Buffer.from(await walrusSvc.readBlob(onchain.headCommit));
-  const commit = parseRemoteCommit(commitBuf);
+  const commit = await loadCommitCached(walrusSvc, witPath, onchain.headCommit);
   if (commit.tree.root_hash !== manifest.root_hash) {
     throw new Error('Commit root_hash does not match manifest; aborting fetch.');
   }
-  await cacheJson(path.join(witPath, 'objects', 'commits', `${idToFileName(onchain.headCommit)}.json`), commitBuf.toString('utf8'));
 
   // Download commit chain (and manifests) for history
   const map = await readCommitIdMapSafe(witPath);
@@ -108,6 +104,42 @@ async function readCommitIdMapSafe(witPath: string): Promise<Record<string, stri
   }
 }
 
+async function loadManifestCached(
+  walrusSvc: WalrusService,
+  witPath: string,
+  manifestId: string
+): Promise<ReturnType<typeof ManifestSchema.parse>> {
+  const file = path.join(witPath, 'objects', 'manifests', `${idToFileName(manifestId)}.json`);
+  try {
+    const raw = await fs.readFile(file, 'utf8');
+    return ManifestSchema.parse(JSON.parse(raw));
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') {
+      // fall through to re-download if parse failed
+    }
+  }
+  const buf = Buffer.from(await walrusSvc.readBlob(manifestId));
+  const manifest = ManifestSchema.parse(JSON.parse(buf.toString('utf8')));
+  await cacheJson(file, canonicalStringify(manifest));
+  return manifest;
+}
+
+async function loadCommitCached(walrusSvc: WalrusService, witPath: string, commitId: string): Promise<RemoteCommit> {
+  const file = path.join(witPath, 'objects', 'commits', `${idToFileName(commitId)}.json`);
+  try {
+    const raw = await fs.readFile(file, 'utf8');
+    return parseRemoteCommit(Buffer.from(raw, 'utf8'));
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') {
+      // fall through to re-download if parse failed
+    }
+  }
+  const buf = Buffer.from(await walrusSvc.readBlob(commitId));
+  const commit = parseRemoteCommit(buf);
+  await cacheJson(file, buf.toString('utf8'));
+  return commit;
+}
+
 async function downloadCommitChain(
   walrusSvc: WalrusService,
   startId: string,
@@ -118,9 +150,7 @@ async function downloadCommitChain(
   let current: string | null = startId;
   while (current && !seen.has(current)) {
     seen.add(current);
-    const buf = Buffer.from(await walrusSvc.readBlob(current));
-    const commit = parseRemoteCommit(buf);
-    await cacheJson(path.join(witPath, 'objects', 'commits', `${idToFileName(current)}.json`), buf.toString('utf8'));
+    const commit = await loadCommitCached(walrusSvc, witPath, current);
     if (!map[current]) {
       map[current] = current;
     }
