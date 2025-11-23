@@ -11,7 +11,8 @@ export async function run(argv = process.argv): Promise<void> {
     .version(VERSION);
 
   registerCommands(program);
-  await program.parseAsync(argv);
+  const normalized = normalizeArgs(argv.slice());
+  await program.parseAsync(normalized);
 }
 
 if (require.main === module) {
@@ -20,4 +21,16 @@ if (require.main === module) {
     console.error(err);
     process.exitCode = 1;
   });
+}
+
+function normalizeArgs(argv: string[]): string[] {
+  const args = [...argv];
+  const idx = args.findIndex((a) => a === 'checkout');
+  if (idx > -1 && args.length > idx + 1) {
+    const next = args[idx + 1];
+    if (next && next.startsWith('-') && next !== '--') {
+      args.splice(idx + 1, 0, '--');
+    }
+  }
+  return args;
 }
