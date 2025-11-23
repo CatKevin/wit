@@ -67,12 +67,23 @@ export async function pushAction(): Promise<void> {
     return;
   }
 
+  // Align parent expectations with on-chain head when possible
+  const parentRemoteHint = headCommit.parent ? commitMap[headCommit.parent] : null;
+  let parentAnchor = baseRemoteId;
+  if (onchainState.headCommit) {
+    if (!parentAnchor && parentRemoteHint === onchainState.headCommit) {
+      parentAnchor = onchainState.headCommit;
+    } else if (parentAnchor && parentAnchor !== onchainState.headCommit) {
+      throw new Error('Remote head diverges from local history; run `wit pull`/`fetch` or reset first.');
+    }
+  }
+
   const walrusSvc = await WalrusService.fromRepo();
 
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`Commits to upload: ${chain.length}`));
 
-  let parentRemoteId = baseRemoteId ?? onchainState.headCommit ?? null;
+  let parentRemoteId = parentAnchor ?? onchainState.headCommit ?? null;
   let lastManifestId: string | null = null;
   let lastQuiltId: string | null = null;
   let lastCommitRemoteId: string | null = null;
