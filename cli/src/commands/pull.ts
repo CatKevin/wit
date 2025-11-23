@@ -1,10 +1,14 @@
+import fs from 'fs/promises';
+import path from 'path';
 import {colors} from '../lib/ui';
 import {requireWitDir, readRemoteRef} from '../lib/repo';
 import {fetchAction} from './fetch';
 import {checkoutAction} from './checkout';
 import {readHeadRefPath, readRef, readCommitById} from '../lib/state';
 import {buildIgnore, computeFileMeta, readIndex, walkFiles, pathToPosix} from '../lib/fs';
-import path from 'path';
+import {ManifestSchema} from '../lib/schema';
+import {computeRootHash} from '../lib/manifest';
+import {WalrusService} from '../lib/walrus';
 
 export async function pullAction(): Promise<void> {
   // eslint-disable-next-line no-console
@@ -82,8 +86,8 @@ async function ensureCleanWorktree(
   // Ensure index matches local HEAD (no staged changes)
   if (localHead) {
     const headCommit = await readCommitById(witPath, localHead);
-    const headFiles = headCommit.tree?.files || {};
-    if (!sameFiles(index, headFiles as any)) {
+    const headFiles = await loadHeadFiles(witPath, headCommit);
+    if (headFiles && !sameFiles(index, headFiles as any)) {
       return {ok: false, reason: 'Index differs from HEAD; clean or reset before pull.'};
     }
   }
@@ -113,4 +117,47 @@ async function isAncestor(witPath: string, ancestorId: string, descendantId: str
     current = commit.parent;
   }
   return false;
+}
+
+async function loadHeadFiles(witPath: string, commit: any): Promise<Record<string, any> | null> {
+  if (commit.tree?.files && Object.keys(commit.tree.files).length) {
+    return commit.tree.files as Record<string, any>;
+  }
+  const manifestId = commit.tree?.manifest_id;
+  if (!manifestId) return null;
+  const file = path.join(witPath, 'objects', 'manifests', `${manifestIdToFile(manifestId)}.json`);
+  let manifest: any | null = null;
+  try {
+    const raw = await fs.readFile(file, 'utf8');
+    manifest = ManifestSchema.parse(JSON.parse(raw));
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') throw err;
+  }
+  if (!manifest) {
+    const walrusSvc = await WalrusService.fromRepo();
+    const buf = Buffer.from(await walrusSvc.readBlob(manifestId));
+    manifest = ManifestSchema.parse(JSON.parse(buf.toString('utf8')));
+    await fs.mkdir(path.dirname(file), {recursive: true});
+    await fs.writeFile(file, canonicalManifest(manifest), 'utf8');
+  }
+  const computed = computeRootHash(
+    Object.fromEntries(
+      Object.entries(manifest.files as Record<string, any>).map(([rel, meta]) => [
+        rel,
+        {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+      ])
+    )
+  );
+  if (commit.tree?.root_hash && commit.tree.root_hash !== computed) {
+    return null;
+  }
+  return manifest.files as Record<string, any>;
+}
+
+function manifestIdToFile(id: string): string {
+  return id.replace(/\//g, '_').replace(/\+/g, '-');
+}
+
+function canonicalManifest(m: any): string {
+  return JSON.stringify(m, null, 2) + '\n';
 }
