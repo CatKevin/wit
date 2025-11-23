@@ -59,6 +59,19 @@ module wit_repository::repository {
         user_address: address,
     }
 
+    /// Event emitted when a collaborator is removed.
+    public struct CollaboratorRemovedEvent has copy, drop {
+        repo_id: address,
+        user_address: address,
+    }
+
+    /// Event emitted when repository ownership is transferred.
+    public struct OwnershipTransferredEvent has copy, drop {
+        repo_id: address,
+        old_owner: address,
+        new_owner: address,
+    }
+
     // === Errors ===
     const ENotAuthorized: u64 = 1;
     const EVersionMismatch: u64 = 2;
@@ -125,23 +138,74 @@ module wit_repository::repository {
     }
 
     /// Removes a collaborator from the repository.
-    /// Only the owner or an existing collaborator can remove collaborators.
+    /// Only the owner can remove collaborators.
     ///
     /// # Arguments
     /// * `repo` - The mutable reference to the repository.
     /// * `addr` - The address of the collaborator to remove.
     /// * `ctx` - The transaction context.
     public fun remove_collaborator(repo: &mut Repository, addr: address, ctx: &TxContext) {
-        assert!(is_owner_or_collaborator(repo, ctx.sender()), ENotAuthorized);
+        // Only owner can remove collaborators
+        assert!(ctx.sender() == repo.owner, ENotAuthorized);
+        
         let len = repo.collaborators.length();
         let mut i = 0;
         while (i < len) {
             if (repo.collaborators[i] == addr) {
                 repo.collaborators.swap_remove(i);
+                
+                event::emit(CollaboratorRemovedEvent {
+                    repo_id: object::uid_to_address(&repo.id),
+                    user_address: addr,
+                });
                 break
             };
             i = i + 1;
         }
+    }
+
+    /// Transfers ownership of the repository to a new address.
+    /// The old owner becomes a collaborator.
+    /// Only the current owner can transfer ownership.
+    ///
+    /// # Arguments
+    /// * `repo` - The mutable reference to the repository.
+    /// * `new_owner` - The address of the new owner.
+    /// * `ctx` - The transaction context.
+    public fun transfer_ownership(repo: &mut Repository, new_owner: address, ctx: &TxContext) {
+        let sender = ctx.sender();
+        assert!(sender == repo.owner, ENotAuthorized);
+        
+        // If new owner is already a collaborator, remove them from the list
+        // (Owner is implicitly a collaborator, so we don't need them in the list)
+        // We reuse remove_collaborator logic but without the event/check overhead for internal use
+        let len = repo.collaborators.length();
+        let mut i = 0;
+        while (i < len) {
+            if (repo.collaborators[i] == new_owner) {
+                repo.collaborators.swap_remove(i);
+                break
+            };
+            i = i + 1;
+        };
+
+        // Add old owner as collaborator if not already there (shouldn't be)
+        if (!contains(&repo.collaborators, sender)) {
+            repo.collaborators.push_back(sender);
+            // We emit CollaboratorAddedEvent for the old owner so indexers know they still have access
+            event::emit(CollaboratorAddedEvent {
+                repo_id: object::uid_to_address(&repo.id),
+                user_address: sender,
+            });
+        };
+
+        repo.owner = new_owner;
+
+        event::emit(OwnershipTransferredEvent {
+            repo_id: object::uid_to_address(&repo.id),
+            old_owner: sender,
+            new_owner,
+        });
     }
 
     /// Updates the head of the repository to point to a new commit.

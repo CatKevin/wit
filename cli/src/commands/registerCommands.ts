@@ -22,6 +22,8 @@ import {
   catQuiltFileById,
 } from './walrusQuilt';
 import { listAction } from './list';
+import { transferAction } from './transfer';
+import { removeUserAction } from './removeUser';
 
 export function registerCommands(program: Command): void {
   // Global options (propagate to subcommands)
@@ -105,8 +107,18 @@ export function registerCommands(program: Command): void {
 
   program
     .command('invite <address>')
-    .description('Manage Seal collaborator policies (future stage)')
+    .description('Add a collaborator to the repository')
     .action(inviteAction);
+
+  program
+    .command('transfer <new_owner>')
+    .description('Transfer repository ownership to a new address')
+    .action(transferAction);
+
+  program
+    .command('remove-user <address>')
+    .description('Remove a collaborator from the repository')
+    .action(removeUserAction);
 
   program
     .command('push-blob <path>')

@@ -1,7 +1,7 @@
-import type {Signer} from '@mysten/sui/cryptography';
-import type {SuiClient} from '@mysten/sui/client';
-import {Transaction} from '@mysten/sui/transactions';
-import {WIT_MODULE_NAME, WIT_PACKAGE_ID} from './constants';
+import type { Signer } from '@mysten/sui/cryptography';
+import type { SuiClient } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
+import { WIT_MODULE_NAME, WIT_PACKAGE_ID } from './constants';
 
 export type OnchainRepoState = {
   repoId: string;
@@ -51,7 +51,7 @@ function getSignerAddress(signer: Signer): string {
 export async function createRepository(
   client: SuiClient,
   signer: Signer,
-  params: {name: string; description?: string; sealPolicyId?: string | null; packageId?: string; moduleName?: string}
+  params: { name: string; description?: string; sealPolicyId?: string | null; packageId?: string; moduleName?: string }
 ): Promise<string> {
   const pkg = params.packageId || WIT_PACKAGE_ID;
   const mod = params.moduleName || WIT_MODULE_NAME;
@@ -65,7 +65,7 @@ export async function createRepository(
       tx.pure.option('vector<u8>', params.sealPolicyId ? utf8ToVec(params.sealPolicyId) : null),
     ],
   });
-  const res = await client.signAndExecuteTransaction({signer, transaction: tx, options: {showEffects: true}});
+  const res = await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
   const created = (res as any)?.effects?.created || [];
   const shared = created.find((c: any) => c?.owner?.Shared !== undefined) || created[0];
   const objectId =
@@ -106,11 +106,11 @@ export async function updateRepositoryHead(
       tx.pure.option('vector<u8>', params.parentCommit ? utf8ToVec(params.parentCommit) : null),
     ],
   });
-  await client.signAndExecuteTransaction({signer, transaction: tx, options: {showEffects: true}});
+  await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
 }
 
 export async function fetchRepositoryState(client: SuiClient, repoId: string): Promise<OnchainRepoState> {
-  const resp = await client.getObject({id: repoId, options: {showContent: true}});
+  const resp = await client.getObject({ id: repoId, options: { showContent: true } });
   const data: any = resp?.data;
   if (!data?.content || data.content.dataType !== 'moveObject') {
     throw new Error('Repository object not found or not a Move object.');
@@ -151,7 +151,7 @@ export async function fetchRepositoryStateWithRetry(
 export async function addCollaborator(
   client: SuiClient,
   signer: Signer,
-  params: {repoId: string; collaborator: string; packageId?: string; moduleName?: string}
+  params: { repoId: string; collaborator: string; packageId?: string; moduleName?: string }
 ): Promise<void> {
   const pkg = params.packageId || WIT_PACKAGE_ID;
   const mod = params.moduleName || WIT_MODULE_NAME;
@@ -161,5 +161,37 @@ export async function addCollaborator(
     target: `${pkg}::${mod}::add_collaborator`,
     arguments: [tx.object(params.repoId), tx.pure.address(params.collaborator)],
   });
-  await client.signAndExecuteTransaction({signer, transaction: tx, options: {showEffects: true}});
+  await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
+}
+
+export async function transferOwnership(
+  client: SuiClient,
+  signer: Signer,
+  params: { repoId: string; newOwner: string; packageId?: string; moduleName?: string }
+): Promise<void> {
+  const pkg = params.packageId || WIT_PACKAGE_ID;
+  const mod = params.moduleName || WIT_MODULE_NAME;
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(getSignerAddress(signer));
+  tx.moveCall({
+    target: `${pkg}::${mod}::transfer_ownership`,
+    arguments: [tx.object(params.repoId), tx.pure.address(params.newOwner)],
+  });
+  await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
+}
+
+export async function removeCollaborator(
+  client: SuiClient,
+  signer: Signer,
+  params: { repoId: string; collaborator: string; packageId?: string; moduleName?: string }
+): Promise<void> {
+  const pkg = params.packageId || WIT_PACKAGE_ID;
+  const mod = params.moduleName || WIT_MODULE_NAME;
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(getSignerAddress(signer));
+  tx.moveCall({
+    target: `${pkg}::${mod}::remove_collaborator`,
+    arguments: [tx.object(params.repoId), tx.pure.address(params.collaborator)],
+  });
+  await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
 }
