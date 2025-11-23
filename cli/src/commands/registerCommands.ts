@@ -7,6 +7,7 @@ import {makeStubAction} from './stub';
 import {addAction, resetAction, statusAction} from './workspace';
 import {pushAction} from './push';
 import {cloneAction} from './clone';
+import {fetchAction} from './fetch';
 import {colorsEnabled, setColorsEnabled} from '../lib/ui';
 import {accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction} from './account';
 import {pushBlobAction, pullBlobAction} from './walrusBlob';
@@ -92,7 +93,7 @@ export function registerCommands(program: Command): void {
   program
     .command('fetch')
     .description('Update remote mirror (head/manifest/commit) without changing worktree')
-    .action(makeStubAction('fetch'));
+    .action(fetchAction);
 
   program
     .command('invite <address>')
