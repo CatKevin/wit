@@ -9,6 +9,7 @@ import {pushAction} from './push';
 import {cloneAction} from './clone';
 import {fetchAction} from './fetch';
 import {pullAction} from './pull';
+import {inviteAction} from './invite';
 import {colorsEnabled, setColorsEnabled} from '../lib/ui';
 import {accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction} from './account';
 import {pushBlobAction, pullBlobAction} from './walrusBlob';
@@ -104,7 +105,7 @@ export function registerCommands(program: Command): void {
   program
     .command('invite <address>')
     .description('Manage Seal collaborator policies (future stage)')
-    .action(makeStubAction('invite'));
+    .action(inviteAction);
 
   program
     .command('push-blob <path>')

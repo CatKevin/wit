@@ -147,3 +147,19 @@ export async function fetchRepositoryStateWithRetry(
   }
   throw lastErr;
 }
+
+export async function addCollaborator(
+  client: SuiClient,
+  signer: Signer,
+  params: {repoId: string; collaborator: string; packageId?: string; moduleName?: string}
+): Promise<void> {
+  const pkg = params.packageId || WIT_PACKAGE_ID;
+  const mod = params.moduleName || WIT_MODULE_NAME;
+  const tx = new Transaction();
+  tx.setSenderIfNotSet(getSignerAddress(signer));
+  tx.moveCall({
+    target: `${pkg}::${mod}::add_collaborator`,
+    arguments: [tx.object(params.repoId), tx.pure.address(params.collaborator)],
+  });
+  await client.signAndExecuteTransaction({signer, transaction: tx, options: {showEffects: true}});
+}
