@@ -17,6 +17,8 @@ Scaffold for the `wit` Node.js/TypeScript CLI (Commander + Ink).
 - Remaining commands are stubbed placeholders until their Stage 1 tasks are implemented.
 
 ## Current status
-- Stage 1: CLI command skeleton is wired; `init`, `status`, and `add` have working logic (index read/write, workspace scan, hashing).
-- Commands stubbed: `commit`, `push`, `clone`, `diff`, `log`, `fetch`, `invite`, `push-blob`.
-- Behavior: remaining commands render placeholders; business logic will be added in subsequent stage 1 tasks (commit engine, state tracking, etc.).
+- Stage 1: CLI command skeleton is wired; `init`, `status`, `add`, `reset`/`restore`, `commit`, `log`, `diff`, `checkout`, `push-blob`/`pull-blob`, `push-quilt`/`pull-quilt`, `quilt-cat`, `quilt-ls`/`quilt-cat-id` have working logic.
+- Quilt: `push-quilt` uses Walrus `writeQuilt` + `writeFiles` to upload, emitting a local manifest (quilt_id, file ids/meta, root_hash); `pull-quilt` downloads via manifest + `getFiles` and verifies hashes. `quilt-cat` pulls a single file by identifier using manifest; `quilt-ls` / `quilt-cat-id` use quilt_id directly. `push-quilt-legacy`/`pull-quilt-legacy` provide a single-blob archive fallback.
+- Blob: `push-blob`/`pull-blob` upload/download and verify hash.
+- Colors: `--color`/`--no-color` and `NO_COLOR`/`WIT_NO_COLOR` env vars.
+- More remote/contract/Web features land in later stages.
