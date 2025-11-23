@@ -17,6 +17,55 @@ export interface Repository {
     seal_policy_id?: string;
 }
 
+// Robust decoder function from CLI (handles multiple formats)
+function decodeVecAsString(raw: unknown): string | null {
+    if (raw === null || raw === undefined) return null;
+
+    // Handle direct string (including hex format)
+    if (typeof raw === 'string') {
+        if (raw.startsWith('0x')) {
+            // Decode hex string to UTF-8
+            try {
+                const hex = raw.slice(2);
+                const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+                return new TextDecoder().decode(bytes);
+            } catch {
+                return raw;
+            }
+        }
+        return raw;
+    }
+
+    // Handle arrays
+    if (Array.isArray(raw)) {
+        if (!raw.length) return null;
+
+        // Array of numbers (byte array)
+        if (raw.every((v) => typeof v === 'number')) {
+            return new TextDecoder().decode(new Uint8Array(raw as number[]));
+        }
+
+        // Array with single element (recurse)
+        if (raw.length === 1) {
+            return decodeVecAsString(raw[0]);
+        }
+
+        // Fallback: try first element
+        return decodeVecAsString(raw[0]);
+    }
+
+    // Handle objects (nested structures)
+    if (typeof raw === 'object') {
+        const asRec = raw as Record<string, any>;
+
+        // Check for common nested patterns
+        if (asRec.vec !== undefined) return decodeVecAsString(asRec.vec);
+        if (asRec.fields !== undefined) return decodeVecAsString(asRec.fields);
+    }
+
+    return String(raw);
+}
+
 export async function getRepository(id: string): Promise<Repository> {
     const object = await suiClient.getObject({
         id,
@@ -36,43 +85,15 @@ export async function getRepository(id: string): Promise<Repository> {
 
     const fields = content.fields;
 
-    // Helper to parse Option<vector<u8>> -> string | undefined
-    const parseOptionBytes = (opt: any): string | undefined => {
-        if (!opt || !opt.fields) return undefined;
-        // Move Option is struct { vec: vector<T> }
-        // If vec is empty, it's None. If vec has 1 element, it's Some.
-        const vec = opt.fields.vec;
-        if (!vec || !Array.isArray(vec) || vec.length === 0) return undefined;
-
-        // The inner value is vector<u8>, which might be represented as number[] or string (base64/hex) depending on RPC
-        // Typically Sui RPC returns vector<u8> as string (if it's a string) or number[]
-        // But here we expect Blob IDs which are strings (or bytes that form a string ID)
-        // Let's assume it's a string or byte array we need to decode.
-        // Wait, in the contract: head_commit: Option<vector<u8>>.
-        // If it's a Blob ID, it's likely a string.
-        // Let's try to convert bytes to string if it's an array.
-        const inner = vec[0];
-        if (typeof inner === 'string') return inner;
-        if (Array.isArray(inner)) return new TextDecoder().decode(new Uint8Array(inner));
-        return undefined;
-    };
-
-    // Helper to parse vector<u8> -> string
-    const parseBytes = (val: any): string => {
-        if (typeof val === 'string') return val;
-        if (Array.isArray(val)) return new TextDecoder().decode(new Uint8Array(val));
-        return '';
-    };
-
     return {
         id: object.data?.objectId || '',
-        name: parseBytes(fields.name),
-        description: parseBytes(fields.description),
+        name: decodeVecAsString(fields.name) || '',
+        description: decodeVecAsString(fields.description) || '',
         owner: fields.owner,
-        head_commit: parseOptionBytes(fields.head_commit),
-        head_manifest: parseOptionBytes(fields.head_manifest),
-        head_quilt: parseOptionBytes(fields.head_quilt),
+        head_commit: decodeVecAsString(fields.head_commit) || undefined,
+        head_manifest: decodeVecAsString(fields.head_manifest) || undefined,
+        head_quilt: decodeVecAsString(fields.head_quilt) || undefined,
         version: Number(fields.version),
-        seal_policy_id: parseOptionBytes(fields.seal_policy_id),
+        seal_policy_id: decodeVecAsString(fields.seal_policy_id) || undefined,
     };
 }

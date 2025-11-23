@@ -86,7 +86,10 @@ export default function RepoDetail() {
                                     {manifestLoading ? (
                                         <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
                                     ) : manifestError ? (
-                                        <div className="text-red-500 text-sm p-4">Failed to load manifest.</div>
+                                        <div className="text-red-500 text-sm p-4">
+                                            Failed to load manifest.
+                                            <div className="mt-2 text-xs font-mono bg-red-50 p-2 rounded">{String(manifestError)}</div>
+                                        </div>
                                     ) : manifest ? (
                                         <FileTree
                                             manifest={manifest}
@@ -94,7 +97,28 @@ export default function RepoDetail() {
                                             selectedPath={selectedFile?.path}
                                         />
                                     ) : (
-                                        <div className="text-slate-400 text-sm p-4 text-center">Empty repository</div>
+                                        <div className="text-center p-6 space-y-4">
+                                            <div className="text-slate-400">
+                                                <GitBranch className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                                                <h3 className="font-semibold text-slate-600 mb-2">Empty Repository</h3>
+                                                <p className="text-xs text-slate-500 leading-relaxed">
+                                                    This repository has been created but no code has been pushed yet.
+                                                </p>
+                                            </div>
+
+                                            <div className="bg-slate-50 rounded-lg p-3 text-left space-y-2">
+                                                <div className="text-xs font-semibold text-slate-700 mb-2">To push code:</div>
+                                                <div className="space-y-1 text-xs font-mono">
+                                                    <div className="text-slate-600">$ wit add .</div>
+                                                    <div className="text-slate-600">$ wit commit -m "Initial commit"</div>
+                                                    <div className="text-slate-600">$ wit push</div>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-xs text-slate-400 pt-2">
+                                                Refresh this page after pushing
+                                            </div>
+                                        </div>
                                     )}
                                 </CardContent>
                             </Card>
