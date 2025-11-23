@@ -49,7 +49,7 @@ const WAL_COIN_BY_NETWORK: Record<string, string> = {
   testnet: '0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL',
   mainnet: '0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL',
 };
-const MIN_SUI_BALANCE = 1_000_000_000n; // 1 SUI (in MIST)
+const MIN_SUI_BALANCE = 100_000_000n; // 0.1 SUI (in MIST) for smoother dev flow
 const MIN_WAL_BALANCE = 1_000_000_000n; // 1 WAL (assuming 9 decimals)
 
 export function keyPathFor(address: string): string {

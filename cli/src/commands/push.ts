@@ -29,7 +29,8 @@ export async function pushAction(): Promise<void> {
   }
   const signerInfo = await loadSigner();
   await ensureAuthorOrSetDefault(witPath, repoCfg, signerInfo.address);
-  await assertResourcesOk(signerInfo.address);
+  const resourcesOk = await assertResourcesOk(signerInfo.address);
+  if (!resourcesOk) return;
 
   const headCommit = await readCommitById(witPath, headId);
   const computedRoot = computeRootHash(headCommit.tree.files);
@@ -311,7 +312,7 @@ async function ensureAuthorOrSetDefault(witPath: string, repoCfg: any, signerAdd
   }
 }
 
-async function assertResourcesOk(address: string): Promise<void> {
+async function assertResourcesOk(address: string): Promise<boolean> {
   const res = await checkResources(address);
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`Using account ${address}`));
@@ -321,16 +322,23 @@ async function assertResourcesOk(address: string): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`  WAL: ${res.walError ? 'query failed' : fmt(res.walBalance)} (min ${res.minWal})`));
   if (res.error) {
-    throw new Error(`Failed to query balances: ${res.error}`);
+    // eslint-disable-next-line no-console
+    console.log(colors.red(`Failed to query balances: ${res.error}`));
+    return false;
   }
   if (res.walError) {
-    throw new Error(`Failed to query WAL balance: ${res.walError}. Please fund or switch account.`);
+    // eslint-disable-next-line no-console
+    console.log(colors.red(`Failed to query WAL balance: ${res.walError}. Please fund or switch account.`));
+    return false;
   }
   if (res.hasMinSui === false) {
-    throw new Error(`Insufficient SUI balance (need at least ${res.minSui} MIST). Please fund or switch account.`);
+    // eslint-disable-next-line no-console
+    console.log(colors.red(`Insufficient SUI balance (need at least ${res.minSui} MIST). Please fund or switch account.`));
+    return false;
   }
   if (res.hasMinWal === false) {
     // eslint-disable-next-line no-console
     console.warn(`Warning: WAL balance below threshold (${res.minWal} min).`);
   }
+  return true;
 }
