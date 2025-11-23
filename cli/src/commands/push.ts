@@ -307,6 +307,13 @@ async function ensureAuthorOrSetDefault(witPath: string, repoCfg: any, signerAdd
 
 async function assertResourcesOk(address: string): Promise<void> {
   const res = await checkResources(address);
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan(`Using account ${address}`));
+  const fmt = (amt?: bigint) => (amt !== undefined ? amt.toString() : 'unknown');
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan(`  SUI: ${fmt(res.suiBalance)} (min ${res.minSui})`));
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan(`  WAL: ${res.walError ? 'query failed' : fmt(res.walBalance)} (min ${res.minWal})`));
   if (res.error) {
     throw new Error(`Failed to query balances: ${res.error}`);
   }
