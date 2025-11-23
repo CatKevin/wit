@@ -27,6 +27,8 @@ export async function cloneAction(repoId: string): Promise<void> {
   if (!repoId) {
     throw new Error('Usage: wit clone <repo_id>');
   }
+  // eslint-disable-next-line no-console
+  console.log(colors.header('Starting clone...'));
   // Prepare .wit layout and config
   const witPath = await ensureLayout(process.cwd(), repoId);
   const resolved = await resolveWalrusConfig(process.cwd());
@@ -42,6 +44,8 @@ export async function cloneAction(repoId: string): Promise<void> {
   }
 
   // Download manifest
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan('Downloading manifest...'));
   const manifestBuf = Buffer.from(await walrusSvc.readBlob(onchain.headManifest));
   const manifest = ManifestSchema.parse(JSON.parse(manifestBuf.toString('utf8')));
   const computedRoot = computeRootHash(
@@ -58,6 +62,8 @@ export async function cloneAction(repoId: string): Promise<void> {
   await cacheJson(path.join(witPath, 'objects', 'manifests', `${idToFileName(onchain.headManifest)}.json`), canonicalStringify(manifest));
 
   // Download remote commit
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan('Downloading commit...'));
   const commitBuf = Buffer.from(await walrusSvc.readBlob(onchain.headCommit));
   const commit = parseRemoteCommit(commitBuf);
   if (commit.tree.root_hash !== manifest.root_hash) {
@@ -71,6 +77,8 @@ export async function cloneAction(repoId: string): Promise<void> {
     if (!meta.id) throw new Error('Manifest entry missing Walrus file id.');
     return meta.id;
   });
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan(`Downloading ${ids.length} files from quilt...`));
   const files = await walrusSvc.getClient().getFiles({ids});
 
   const index: Index = {};
