@@ -76,11 +76,11 @@ module wit_repository::repository {
         new_owner: address,
     }
 
-    /// Event emitted when the seal policy is updated.
-    public struct SealPolicyUpdatedEvent has copy, drop {
-        repo_id: address,
-        new_policy_id: Option<vector<u8>>,
-    }
+    // Event emitted when the seal policy is updated.
+    // public struct SealPolicyUpdatedEvent has copy, drop {
+    //     repo_id: address,
+    //     new_policy_id: Option<vector<u8>>,
+    // }
 
     /// Event emitted when repository information (name, description) is updated.
     public struct RepoInfoUpdatedEvent has copy, drop {
@@ -95,7 +95,7 @@ module wit_repository::repository {
     const EParentMismatch: u64 = 3;
     const EIsPrivateRepo: u64 = 4;
     const EIsPublicRepo: u64 = 5;
-    const EInvalidWhitelist: u64 = 6;
+    // const EInvalidWhitelist: u64 = 6;
 
     /// Updates the repository name and description.
     /// Only the owner can update this information.
@@ -133,17 +133,16 @@ module wit_repository::repository {
         let repo_id = object::uid_to_address(&id);
         let owner = ctx.sender();
 
-        let mut seal_policy_id = option::none();
-        let mut whitelist_cap = option::none();
-
-        if (is_private) {
-            let (cap, wl) = whitelist::create_whitelist(ctx);
+        let (seal_policy_id, whitelist_cap) = if (is_private) {
+            let (cap, mut wl) = whitelist::create_whitelist(ctx);
             // Add owner to whitelist by default
             whitelist::add(&mut wl, &cap, owner);
             
-            seal_policy_id = option::some(object::id(&wl).to_bytes());
-            whitelist_cap = option::some(cap);
+            let policy_id = object::id(&wl).to_bytes();
             whitelist::share_whitelist(wl);
+            (option::some(policy_id), option::some(cap))
+        } else {
+            (option::none(), option::none())
         };
 
         let repo = Repository {
@@ -255,31 +254,8 @@ module wit_repository::repository {
         assert!(sender == repo.owner, ENotAuthorized);
         assert!(repo.whitelist_cap.is_some(), EIsPublicRepo);
 
-        // Add new owner to whitelist if not present
-        // Note: whitelist::add asserts !contains. We should handle this.
-        // Since we can't easily check contains without exposing it in whitelist module,
-        // we might fail if new_owner is already in whitelist.
-        // Ideally whitelist::add should be idempotent or we expose contains.
-        // For now, we assume the whitelist module throws if duplicate.
-        // We can try to add, if it fails, it fails. 
-        // BUT, if new_owner is already a collaborator, they might be in whitelist.
-        // We should probably modify whitelist.move to be idempotent or expose contains.
-        // For this MVP, let's assume we modify whitelist.move to be idempotent or just try catch? Move doesn't have try catch.
-        // Let's modify whitelist.move to not abort on duplicate add?
-        // Or just proceed. If new_owner is already whitelisted, we shouldn't call add.
-        // But we don't know.
-        // Let's rely on the fact that `perform_transfer` handles the collaborator list.
-        // For whitelist, we MUST ensure new_owner has access.
-        // Let's just call add. If it fails (duplicate), the transaction fails.
-        // This is bad UX.
-        // We should update whitelist.move to `add_idempotent`.
-        
         let cap = repo.whitelist_cap.borrow();
-        // whitelist::add(wl, cap, new_owner); // This risks failure
-        
-        // WORKAROUND: We will assume for now that we call add. 
-        // If the user is already whitelisted, they should use a different flow or we fix whitelist.move.
-        // Let's fix whitelist.move in the next step to be safe.
+        // Add new owner to whitelist. This is idempotent.
         whitelist::add(wl, cap, new_owner);
 
         perform_transfer(repo, sender, new_owner);

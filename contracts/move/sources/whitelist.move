@@ -55,6 +55,7 @@ module wit_repository::whitelist {
         (cap, wl)
     }
 
+    #[allow(lint(share_owned), lint(custom_state_change))]
     public fun share_whitelist(wl: Whitelist) {
         transfer::share_object(wl);
     }
