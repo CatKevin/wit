@@ -125,9 +125,7 @@ export async function cloneAction(repoId: string): Promise<void> {
           `Seal decryption failed for ${rel}. Ensure you are whitelisted for policy ${(meta.enc as any)?.policy_id || sealPolicyId}.`
         )
       );
-      // eslint-disable-next-line no-console
-      console.log(colors.red(`Error: ${err.message}`));
-      return;
+      throw new Error(`Decryption failed: ${err.message}`);
     }
     const hash = sha256Base64(plain);
     if (hash !== meta.hash || plain.length !== meta.size) {

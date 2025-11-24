@@ -114,129 +114,63 @@ export async function decryptWithSeal(cipher: Buffer, meta: EncryptionMeta, sign
     throw new Error(`Unsupported encryption alg: ${meta.alg}`);
   }
 
-  const client = getSealClient(suiClient);
-  const sealedKey = Buffer.from(meta.sealed_session_key, 'base64');
+  try {
+    const client = getSealClient(suiClient);
+    const sealedKey = Buffer.from(meta.sealed_session_key, 'base64');
 
-  // 1. Create Ephemeral Session Key for Seal Protocol
-  // This is NOT the AES key. This is for the decryption request.
-  const sessionKey = await SessionKey.create({
-    address: signer.getPublicKey().toSuiAddress(),
-    packageId: meta.package_id,
-    ttlMin: 10,
-    signer,
-    suiClient: suiClient as any,
-  });
+    // 1. Create Ephemeral Session Key for Seal Protocol
+    // This is NOT the AES key. This is for the decryption request.
+    const address = (signer as any).getPublicKey().toSuiAddress();
+    const sessionKey = await SessionKey.create({
+      address: address,
+      packageId: meta.package_id,
+      ttlMin: 10,
+      signer,
+      suiClient: suiClient as any,
+    });
 
-  // 2. Construct Transaction for seal_approve
-  const tx = new Transaction();
-  tx.setSender(signer.getPublicKey().toSuiAddress());
-  // Convert policy_id string to vector<u8> if needed?
-  // whitelist.move expects vector<u8>.
-  // If policy_id is hex string (from object ID), we should convert it to bytes?
-  // Or is it passed as string?
-  // In `push.ts`, policyId is `repoCfg.seal_policy_id`.
-  // In `create_repo`, we stored `object::id(&wl).to_bytes()`.
-  // So it is bytes.
-  // `utf8ToVec`? No, if it's hex string of ID, we should parse it.
-  // But `repoCfg.seal_policy_id` comes from `decodeVecAsString`.
-  // If it was stored as bytes, `decodeVecAsString` returns hex string (if starts with 0x) or utf8.
-  // Object ID bytes are 32 bytes.
-  // If `seal_policy_id` is the hex string of the ID.
-  // We need to pass it as `vector<u8>`.
-  // `tx.pure.vector('u8', fromHex(meta.policy_id))`?
+    // 2. Construct Transaction for seal_approve
+    const tx = new Transaction();
 
-  // Helper to convert hex to bytes
-  const policyIdBytes = fromHex(meta.policy_id);
+    // Helper to convert hex to bytes
+    const policyIdBytes = fromHex(meta.policy_id);
 
-  tx.moveCall({
-    target: `${meta.package_id}::whitelist::seal_approve`,
-    arguments: [
-      tx.pure.vector('u8', policyIdBytes),
-      tx.object(meta.policy_id), // The Whitelist object itself! Wait.
-      // `seal_approve(id: vector<u8>, wl: &Whitelist)`
-      // The first arg `id` is the "key id" (prefix).
-      // The second arg `wl` is the Whitelist object.
-      // In `create_repo`, we set `seal_policy_id` to `object::id(&wl).to_bytes()`.
-      // So `meta.policy_id` IS the Whitelist Object ID (as string).
-      // So we pass it as the second argument (Object).
-      // AND as the first argument (Bytes)?
-      // Yes, `check_policy` checks if `id` starts with `wl.id`.
-      // So we pass the same ID.
-    ],
-  });
+    tx.moveCall({
+      target: `${meta.package_id}::whitelist::seal_approve`,
+      arguments: [
+        tx.pure.vector('u8', policyIdBytes),
+        tx.object(meta.policy_id), // The Whitelist object itself
+      ],
+    });
 
-  // 3. Sign the transaction to get txBytes
-  // We don't execute it! We just sign it.
-  const { bytes, signature } = await (signer as any).signTransaction({
-    transaction: tx,
-  });
+    // 3. Build the transaction to get txBytes
+    // Important: Use onlyTransactionKind: true as per Seal examples
+    const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
 
-  // We need to combine bytes and signature?
-  // Seal SDK `decrypt` takes `txBytes`.
-  // Based on `session-key.ts` `createRequestParams(txBytes)`, it seems to expect just the bytes?
-  // But how does it verify signature?
-  // Maybe `txBytes` should include signature?
-  // Or maybe `SealClient` doesn't verify signature locally, but Key Servers do.
-  // Key Servers need signature.
-  // If I pass only `bytes` (TransactionData), Key Servers can't verify.
-  // So `txBytes` MUST be the `SenderSignedData` bytes.
-  // How to construct `SenderSignedData` from bytes and signature?
-  // `@mysten/sui/transactions` doesn't expose it easily?
-  // Actually, `signer.signTransaction` returns `bytes` (BCS of TransactionData) and `signature`.
-  // I might need to use `Transaction.from(bytes)`? No.
-  // I'll try passing `bytes` first. If it fails, I'll investigate.
-  // Wait, `SessionKey` `createRequestParams` takes `txBytes`.
-  // If I look at `SealClient.decrypt` implementation (if I could), I would know.
-  // But I can't.
-  // Let's assume `txBytes` is the `bytes` returned by `signTransaction`.
-  // AND we might need to pass signature somewhere?
-  // `DecryptOptions` has `txBytes`. No `signature` field.
-  // So `txBytes` MUST contain the signature.
-  // So I need to serialize `SenderSignedData`.
-  // I can use `suiClient` to execute dry run? No.
-  // I need to construct the envelope.
-  // I'll use a helper `mergeTxBytesAndSignature` if I can find one, or implement it.
-  // `SenderSignedData` is `vector<u8>` (tx_bytes) + `vector<Signature>`.
-  // Actually, in Sui, `SenderSignedData` is a struct.
-  // I'll try to find a way to get the full bytes.
-  // `signer.signAndExecuteTransaction` sends the full bytes.
-  // `signer.signTransaction` returns components.
-  // Maybe `Transaction` class has `build` method that returns bytes?
-  // `tx.build({ client, signer })` returns bytes of `TransactionData`.
+    // 4. Decrypt the sealed session key
+    const sessionKeyBytes = await client.decrypt({
+      data: sealedKey,
+      sessionKey,
+      txBytes: Buffer.from(txBytes),
+    });
 
-  // Let's try to use `bytes` from `signTransaction` and hope Seal SDK handles it or I find the right way.
-  // Actually, if `SealClient` uses `suiClient`, maybe it can help?
-  // No.
+    const decryptedSessionKey = Buffer.from(sessionKeyBytes);
 
-  // I will use a placeholder `txBytes` for now and add a TODO to verify.
-  // Or better, I will assume `txBytes` is `bytes` from `signTransaction` because that's the most common "bytes" in Sui SDK.
-  // (Even though it lacks signature).
-  // Maybe `sessionKey` (the object) handles the signature?
-  // `sessionKey.setPersonalMessageSignature`? No.
+    // 5. Decrypt Data with the session key
+    const iv = Buffer.from(meta.iv, 'base64');
+    const tag = Buffer.from(meta.tag, 'base64');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', decryptedSessionKey, iv);
+    decipher.setAuthTag(tag);
 
-  // Let's look at `session-key.d.ts` again.
-  // `createRequestParams(txBytes)`.
-
-  // I'll proceed with `bytes` from `signTransaction`.
-
-  const sessionKeyBytes = await client.decrypt({
-    data: sealedKey,
-    sessionKey,
-    txBytes: Buffer.from(bytes),
-  });
-
-  const decryptedSessionKey = Buffer.from(sessionKeyBytes);
-
-  // 4. Decrypt Data
-  const iv = Buffer.from(meta.iv, 'base64');
-  const tag = Buffer.from(meta.tag, 'base64');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', decryptedSessionKey, iv);
-  decipher.setAuthTag(tag);
-
-  return Buffer.concat([decipher.update(cipher), decipher.final()]);
+    return Buffer.concat([decipher.update(cipher), decipher.final()]);
+  } catch (err: any) {
+    // Provide more specific error information for debugging
+    console.error('Seal decryption error:', err);
+    throw err;
+  }
 }
 
-function fromHex(hex: string): Uint8Array {
+function fromHex(hex: string): number[] {
   if (hex.startsWith('0x')) hex = hex.slice(2);
-  return Uint8Array.from(Buffer.from(hex, 'hex'));
+  return Array.from(Buffer.from(hex, 'hex'));
 }
