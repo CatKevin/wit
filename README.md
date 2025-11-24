@@ -2,19 +2,21 @@
 
 **Your code, truly private. No corporation, no government, no AI can access it.**
 
+WIT provides **Fully Encrypted Storage** by leveraging **Seal** for decentralized key management and **Walrus** for decentralized storage.
+
 ```bash
 npm install -g withub-cli
 ```
 
-## Why Now? The Perfect Storm of Failures
+## Why Now? The Risks of Centralization
 
-**Cloudflare's recent outage took down half the internet** - including GitHub, GitLab, and millions of repositories. Developers worldwide couldn't access their own code.
+**The fragility of the cloud is real.** The recent **Cloudflare outage** caused a global collapse of cloud services, proving that centralized storage is a massive risk. When the cloud goes down, you lose access to your work.
 
-**GitHub is training AI on your private code** - Your proprietary algorithms are becoming training data for commercial AI models, without your consent.
+**Your privacy is not guaranteed.** GitHub and other platforms may use your private code to **train commercial AI models** without your explicit consent. No one knows if your proprietary algorithms are being leaked or used against you.
 
-**One account ban = permanent code loss** - False positives, sanctions, credit card issues - any reason can lock you out of your private repositories forever.
+**You don't own your account.** If your account is lost, banned, or suspended for any reason, your **private code could be lost forever**. You are one policy change away from losing everything.
 
-**Local storage is a ticking time bomb** - Hardware failures, ransomware, theft - one incident and years of work vanish.
+**Local storage is not enough.** Relying on a local machine exposes you to hardware damage, theft, or corruption. You need a backup that is as resilient as the blockchain.
 
 ## The Solution: Complete End-to-End Encryption + Decentralization
 
@@ -47,7 +49,6 @@ wit push  # Encrypted with AES-256-GCM, sealed with your keys
 - No accounts to ban, no platforms to trust
 - Lose GitHub access? Your WIT repositories remain accessible
 - Automatic key rotation when removing collaborators
-- Zero-knowledge architecture - we CAN'T read your code even if forced
 
 ## Quick Start
 
