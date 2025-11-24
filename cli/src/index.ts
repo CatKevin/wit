@@ -1,5 +1,7 @@
+#!/usr/bin/env node
 import { Command } from 'commander';
 import { registerCommands } from './commands/registerCommands';
+import pkg from '../package.json';
 
 // Polyfill for toReversed (Node < 20)
 if (!Array.prototype.toReversed) {
@@ -9,7 +11,7 @@ if (!Array.prototype.toReversed) {
   };
 }
 
-const VERSION = '0.1.0-dev';
+const VERSION = pkg.version || '0.0.0';
 
 export async function run(argv = process.argv): Promise<void> {
   const program = new Command();

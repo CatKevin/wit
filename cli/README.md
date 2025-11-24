@@ -1,24 +1,41 @@
 # wit CLI
 
-Scaffold for the `wit` Node.js/TypeScript CLI (Commander + Ink).
+Wit with Withub: A private, decentralized alternative to Git with GitHub, powered by Walrus. This CLI (Node.js/TypeScript, Commander + Ink) talks directly to Walrus decentralized storage instead of centralized hosts, targeting a single-branch, verifiable repository model with Sui state integration.
 
-## Scripts
-- `npm install` (once) to pull deps.
-- `npm run build` to compile to `dist/`.
-- `node dist/index.js --help` to view the stubbed commands.
+## Requirements
+- Node.js >= 18.
+- Access to a Walrus relay (testnet by default); Sui RPC endpoints are configurable as the state layer evolves.
 
-## Usage (dev)
+## Install & Run
+- Global install: `npm install -g @wit/cli` then `wit --help`.
+- On-demand: `npx @wit/cli --help` (no global install needed).
+- Upgrade: `npm install -g @wit/cli@latest`. Uninstall: `npm uninstall -g @wit/cli`.
+
+## Quickstart
 - Initialize a repo scaffold in the current directory:
   ```bash
-  node dist/index.js init <repo-name>
+  wit init <repo-name>
   ```
-  This creates `.wit/` layout, writes `config.json` with defaults (network testnet, Walrus relay testnet, author/key_alias placeholders), and ensures `.gitignore`/`.witignore` contain `.wit/` and key paths.
-- `status`, `add`, `reset`/`restore --staged`, `restore <paths>`, `checkout`, `commit`, `log`, and `diff` work: index read/write, hashing, ignore patterns, recursive add, add-all, staged deletions, unstage paths, worktree restore from index, checkout commit snapshots (update HEAD/index/worktree), canonical commit serialization + hashing, head ref updates, commit history traversal, and unified diff for worktree vs index / index vs HEAD (text vs binary flag). Output is colorized for readability and can be toggled via `--color`/`--no-color` or `WIT_NO_COLOR`/`NO_COLOR`.
-- Remaining commands are stubbed placeholders until their Stage 1 tasks are implemented.
+  This creates `.wit/`, writes `config.json` with sensible defaults (Walrus testnet relay, author/key placeholders), and ensures `.gitignore` / `.witignore` include `.wit/` and key paths.
+- Local VC workflow: `wit status`, `wit add`, `wit reset` / `wit restore --staged`, `wit restore <paths>`, `wit commit`, `wit log`, `wit diff`, `wit checkout`.
+- Storage experiments: `wit push-blob` / `pull-blob`; `wit push-quilt` / `pull-quilt` / `quilt-cat` / `quilt-ls` / `quilt-cat-id`; `push-quilt-legacy` / `pull-quilt-legacy` as archive fallback.
+- Colorized output can be toggled via `--color` / `--no-color` or env vars `NO_COLOR` / `WIT_NO_COLOR`.
 
-## Current status
-- Stage 1: CLI command skeleton is wired; `init`, `status`, `add`, `reset`/`restore`, `commit`, `log`, `diff`, `checkout`, `push-blob`/`pull-blob`, `push-quilt`/`pull-quilt`, `quilt-cat`, `quilt-ls`/`quilt-cat-id` have working logic.
-- Quilt: `push-quilt` uses Walrus `writeQuilt` + `writeFiles` to upload, emitting a local manifest (quilt_id, file ids/meta, root_hash); `pull-quilt` downloads via manifest + `getFiles` and verifies hashes. `quilt-cat` pulls a single file by identifier using manifest; `quilt-ls` / `quilt-cat-id` use quilt_id directly. `push-quilt-legacy`/`pull-quilt-legacy` provide a single-blob archive fallback.
-- Blob: `push-blob`/`pull-blob` upload/download and verify hash.
-- Colors: `--color`/`--no-color` and `NO_COLOR`/`WIT_NO_COLOR` env vars.
-- More remote/contract/Web features land in later stages.
+## Developer Scripts
+- `npm ci`: install dependencies deterministically.
+- `npm run build`: compile to `dist/` (entry `dist/index.js` ships with shebang for npm shims).
+- `npm start`: run the compiled CLI locally.
+- `npm run test:smoke`: minimal smoke test.
+- `prepublishOnly`: runs `npm run build && npm run test:smoke` to guard against unbuilt or untested publishes.
+
+## Publish Checklist (manual)
+1) `npm ci && npm run build`.
+2) `npm run test:smoke`.
+3) `npm pack` and inspect the tarball (should contain `dist/**`, `README.md`, `LICENSE`, `package.json`; `bin` points to `dist/index.js`).
+4) `npm publish` (scope is already `access: public`; for prerelease use `npm publish --tag next`).
+5) Verify: `npm info @wit/cli version`, `npx @wit/cli --version`, optionally `npm install -g @wit/cli && wit --help` for global smoke.
+
+## Current Scope
+- Local VC core: `init`, `status`, `add`, `reset`, `restore`, `commit`, `log`, `diff`, `checkout`.
+- Walrus storage flows: quilt/blob push/pull commands plus legacy archive fallback.
+- Remote/contract/Web flows are under active development; CLI surfaces will expand alongside Sui state and privacy (Seal) integration.

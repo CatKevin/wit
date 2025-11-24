@@ -2,13 +2,24 @@
   "name": "@wit/cli",
   "version": "0.1.0",
   "description": "wit CLI (Commander + Ink) skeleton",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CatKevin/wit.git",
+    "directory": "wit/cli"
+  },
+  "homepage": "https://github.com/CatKevin/wit#readme",
+  "bugs": {
+    "url": "https://github.com/CatKevin/wit/issues"
+  },
+  "author": "CatKevin",
   "bin": {
     "wit": "dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test:smoke": "NO_COLOR=1 bash scripts/smoke.sh"
+    "test:smoke": "NO_COLOR=1 bash scripts/smoke.sh",
+    "prepublishOnly": "npm run build && npm run test:smoke"
   },
   "dependencies": {
     "@mysten/seal": "^0.9.4",
@@ -33,5 +44,14 @@
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT"
+  "license": "Apache-2.0",
+  "files": [
+    "dist/**",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
