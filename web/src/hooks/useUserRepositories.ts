@@ -1,6 +1,6 @@
 import {useQuery} from '@tanstack/react-query';
-import {useCurrentAccount} from '@mysten/dapp-kit';
-import {suiClient, decodeVecAsString} from '@/lib/sui';
+import {useCurrentAccount, useSuiClient} from '@mysten/dapp-kit';
+import {decodeVecAsString} from '@/lib/sui';
 import {WIT_PACKAGE_ID, WIT_MODULE_NAME} from '@/lib/constants';
 
 export type UserRepo = {
@@ -11,6 +11,7 @@ export type UserRepo = {
 
 export function useUserRepositories() {
   const account = useCurrentAccount();
+  const suiClient = useSuiClient();
   const address = account?.address;
 
   return useQuery({

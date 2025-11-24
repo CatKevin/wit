@@ -3,7 +3,20 @@ import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 export const SUI_NETWORK = 'testnet';
 export const SUI_RPC_URL = getFullnodeUrl(SUI_NETWORK);
 
-export const suiClient = new SuiClient({ url: SUI_RPC_URL });
+// Create a default client, but this should be overridden by the provider
+let suiClient: SuiClient | null = null;
+
+export function getSuiClient(): SuiClient {
+    if (!suiClient) {
+        suiClient = new SuiClient({ url: SUI_RPC_URL });
+    }
+    return suiClient;
+}
+
+// Allow setting the client from the provider
+export function setSuiClient(client: SuiClient) {
+    suiClient = client;
+}
 
 export interface Repository {
     id: string;
@@ -66,7 +79,8 @@ export function decodeVecAsString(raw: unknown): string | null {
     return String(raw);
 }
 
-export async function getRepository(id: string): Promise<Repository> {
+export async function getRepository(id: string, client?: SuiClient): Promise<Repository> {
+    const suiClient = client || getSuiClient();
     const object = await suiClient.getObject({
         id,
         options: {
