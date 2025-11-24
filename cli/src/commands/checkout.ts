@@ -105,7 +105,10 @@ async function resolveFilesForCommit(witPath: string, commit: any, sealPolicyId:
   if (computedRoot !== commit.tree.root_hash) {
     throw new Error('Commit root_hash does not match manifest.');
   }
-  await ensureBlobsFromManifest(witPath, manifest, sealPolicyId);
+  const ok = await ensureBlobsFromManifest(witPath, manifest, sealPolicyId);
+  if (!ok) {
+    throw new Error('Failed to materialize files (likely seal decryption error).');
+  }
   return manifest.files as Index;
 }
 
@@ -128,7 +131,7 @@ async function loadManifest(witPath: string, manifestId: string) {
   return manifest;
 }
 
-async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolicyId: string | null): Promise<void> {
+async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolicyId: string | null): Promise<boolean> {
   const entries = Object.entries(manifest.files) as [string, any][];
   const missing: {rel: string; meta: any}[] = [];
   for (const [rel, meta] of entries) {
@@ -137,7 +140,7 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolic
       missing.push({rel, meta});
     }
   }
-  if (!missing.length) return;
+  if (!missing.length) return true;
   const walrusSvc = await WalrusService.fromRepo();
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`Fetching ${missing.length} missing blobs from Walrus...`));
@@ -152,7 +155,18 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolic
   }
   for (const {rel, meta} of missing) {
     const data = await fetchFileBytes(walrusSvc, manifest, rel, meta, seal);
-    const plain = seal && meta.enc ? decryptWithSeal(data, meta.enc, seal) : data;
+    let plain: Buffer;
+    try {
+      plain = seal && meta.enc ? decryptWithSeal(data, meta.enc, seal) : data;
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.log(
+        colors.red(
+          `Seal decryption failed for ${rel}. Check WIT_SEAL_SECRET (policy ${meta.enc?.policy || sealPolicyId || 'unknown'}).`
+        )
+      );
+      return false;
+    }
     const hash = sha256Base64(plain);
     if (hash !== meta.hash || plain.length !== meta.size) {
       throw new Error(`Downloaded blob mismatch for ${rel}`);
@@ -161,6 +175,7 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolic
     await ensureDirForFile(blobPath);
     await fs.writeFile(blobPath, plain);
   }
+  return true;
 }
 
 function manifestIdToFile(id: string): string {

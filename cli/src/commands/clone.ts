@@ -111,7 +111,18 @@ export async function cloneAction(repoId: string): Promise<void> {
   for (let i = 0; i < entries.length; i += 1) {
     const [rel, meta] = entries[i];
     const data = await fetchFileBytes(walrusSvc, manifest, rel, meta);
-    const plain = meta.enc ? decryptWithSeal(data, meta.enc, seal!) : data;
+    let plain: Buffer;
+    try {
+      plain = meta.enc ? decryptWithSeal(data, meta.enc, seal!) : data;
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.log(
+        colors.red(
+          `Seal decryption failed for ${rel}. Check WIT_SEAL_SECRET (policy ${meta.enc?.policy || sealPolicyId || 'unknown'}).`
+        )
+      );
+      return;
+    }
     const hash = sha256Base64(plain);
     if (hash !== meta.hash || plain.length !== meta.size) {
       throw new Error(`Hash/size mismatch for ${rel}`);
