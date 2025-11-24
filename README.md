@@ -163,3 +163,112 @@ cd web && npm install && npm run dev
 **Stop trusting corporations with your intellectual property. Start owning your code.**
 
 Repository: [https://github.com/CatKevin/wit](https://github.com/CatKevin/wit)
+
+## Privacy & Encryption Testing Guide
+
+> **Goal**: Verify privacy features using Seal SDK, including private repo creation, envelope encryption, on-chain whitelist management, and decryption.
+
+### Core Concept: Envelope Encryption
+
+To achieve efficient and decentralized privacy, we use the Envelope Encryption pattern:
+1.  **Data Encryption**: File content is encrypted using a randomly generated symmetric key (AES-256-GCM).
+2.  **Key Encapsulation**: The symmetric key itself is encrypted using the **Seal SDK**, targeting the on-chain **Seal Policy ID** (Whitelist object ID).
+3.  **Decryption Flow**:
+    *   User requests decryption and proves they have access rights.
+    *   User wallet signs a transaction pointing to `whitelist::seal_approve`.
+    *   Seal service nodes verify the transaction signature and on-chain whitelist status.
+    *   Upon verification, the Seal service returns the decrypted symmetric key.
+    *   Client uses the symmetric key to decrypt the file content.
+
+### Prerequisites
+
+1.  **Install**
+    ```bash
+    # CLI
+    npm install -g withub-cli
+    
+    # Web
+    cd ../web && npm install && npm run build
+    ```
+2.  **Test Accounts**
+    *   **OWNER**: Creator of the private repository.
+    *   **COLLAB**: Invited collaborator.
+    *   **ALIEN**: Unauthorized third-party user (for negative testing).
+
+### Test Cases
+
+#### Case 1: Create Private Repo (Init Private)
+**Goal**: Verify `wit init --private` correctly initializes local config and marks it as pending private status.
+**Steps**:
+1.  Switch to **OWNER** account.
+2.  Initialize private repo:
+    ```bash
+    wit init demo-repo --private
+    ```
+3.  **Verify**: Check `.wit/config.json`, it should contain `seal_policy_id = "pending"`.
+
+#### Case 2: Push & Policy Creation
+**Goal**: Verify the first Push automatically creates an on-chain Whitelist object and uses its ID for encryption.
+**Steps**:
+1.  Add files:
+    ```bash
+    echo "Secret Data 123" > secret.txt
+    wit add .
+    wit commit -m "Initial secret commit"
+    ```
+2.  Push to chain:
+    ```bash
+    wit push
+    ```
+3.  **Verify**:
+    *   CLI output should show `Creating private repository...` and `Seal Policy ID: <OBJECT_ID>`.
+    *   Check `.wit/config.json`, `seal_policy_id` should be updated to the actual Object ID.
+
+#### Case 3: Invite Collaborator
+**Goal**: Verify `wit invite` updates the collaborator list and calls `whitelist::add` to authorize Seal access.
+**Steps**:
+1.  Get **COLLAB** address.
+2.  Execute invite:
+    ```bash
+    wit invite <COLLAB_ADDRESS>
+    ```
+3.  **Verify**: CLI indicates success.
+
+#### Case 4: Collaborator Clone & Decrypt
+**Goal**: Verify collaborator can successfully decrypt data using Seal SDK.
+**Steps**:
+1.  Switch to **COLLAB** account:
+    ```bash
+    wit account use <COLLAB_ADDRESS>
+    ```
+2.  Clone repository:
+    ```bash
+    wit clone <REPO_ID> collab-repo
+    cd collab-repo
+    ```
+3.  **Verify**:
+    *   CLI prompts `Decrypting file: secret.txt...`.
+    *   Check content: `cat secret.txt` should output `Secret Data 123`.
+
+#### Case 5: Web Decryption
+**Goal**: Verify Web frontend can complete decryption flow via browser wallet.
+**Steps**:
+1.  Start Web service: `npm run dev` (in `wit/web`).
+2.  Open `http://localhost:5173`.
+3.  Connect **COLLAB** account wallet.
+4.  Go to repository detail page and click `secret.txt`.
+5.  **Verify**:
+    *   Browser requests wallet signature (Sign Transaction -> `seal_approve`).
+    *   After signing, page displays decrypted plaintext `Secret Data 123`.
+
+#### Case 6: Unauthorized Access (Negative Test)
+**Goal**: Verify users not on the whitelist cannot decrypt.
+**Steps**:
+1.  Switch to **ALIEN** account.
+2.  Attempt to clone:
+    ```bash
+    wit clone <REPO_ID> alien-repo
+    ```
+3.  **Verify**:
+    *   Clone might succeed (metadata is public), but **decryption must fail**.
+    *   CLI reports `Seal decryption failed` or content remains encrypted/garbled.
