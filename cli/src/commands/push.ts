@@ -50,6 +50,8 @@ export async function pushAction(): Promise<void> {
       console.log(colors.red('Set WIT_SEAL_SECRET or place .wit/seal/<policy>.secret, then retry push.'));
       return;
     }
+    // eslint-disable-next-line no-console
+    console.log(colors.cyan(`Seal enabled: files will be encrypted with policy ${repoCfg.seal_policy_id}.`));
   }
 
   const commitMap = await readCommitIdMap(witPath);
