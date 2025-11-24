@@ -164,9 +164,15 @@ export async function decryptWithSeal(cipher: Buffer, meta: EncryptionMeta, sign
 
     return Buffer.concat([decipher.update(cipher), decipher.final()]);
   } catch (err: any) {
-    // Provide more specific error information for debugging
-    console.error('Seal decryption error:', err);
-    throw err;
+    // Handle specific error types with user-friendly messages
+    if (err.name === 'NoAccessError' || err.message?.includes('does not have access')) {
+      throw new Error('NoAccess: User is not whitelisted for this repository');
+    }
+    if (err.name === 'TimeoutError' || err.message?.includes('timeout')) {
+      throw new Error('Timeout: Unable to connect to Seal servers');
+    }
+    // For other errors, throw with original message
+    throw new Error(`Seal decryption failed: ${err.message || err}`);
   }
 }
 

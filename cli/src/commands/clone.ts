@@ -119,13 +119,27 @@ export async function cloneAction(repoId: string): Promise<void> {
         plain = data;
       }
     } catch (err: any) {
+      // Handle decryption errors gracefully
+      if (err.message?.includes('NoAccess')) {
+        // eslint-disable-next-line no-console
+        console.log(colors.red('❌ Access denied: You are not whitelisted for this private repository.'));
+        // eslint-disable-next-line no-console
+        console.log(colors.yellow(`   Policy ID: ${(meta.enc as any)?.policy_id || sealPolicyId}`));
+        // eslint-disable-next-line no-console
+        console.log(colors.yellow('   Please contact the repository owner to be added to the whitelist.'));
+        process.exit(1);
+      }
+      if (err.message?.includes('Timeout')) {
+        // eslint-disable-next-line no-console
+        console.log(colors.red('❌ Connection timeout: Unable to reach Seal decryption servers.'));
+        // eslint-disable-next-line no-console
+        console.log(colors.yellow('   Please check your network connection and try again.'));
+        process.exit(1);
+      }
+      // For other errors, show the file that failed
       // eslint-disable-next-line no-console
-      console.log(
-        colors.red(
-          `Seal decryption failed for ${rel}. Ensure you are whitelisted for policy ${(meta.enc as any)?.policy_id || sealPolicyId}.`
-        )
-      );
-      throw new Error(`Decryption failed: ${err.message}`);
+      console.log(colors.red(`❌ Failed to decrypt ${rel}: ${err.message}`));
+      process.exit(1);
     }
     const hash = sha256Base64(plain);
     if (hash !== meta.hash || plain.length !== meta.size) {
