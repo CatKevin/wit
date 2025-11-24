@@ -1,8 +1,6 @@
-import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import {readActiveAddress} from '../lib/keys';
-import {ensureSealSecret} from '../lib/seal';
+import { readActiveAddress } from '../lib/keys';
 
 type GlobalConfig = {
   author?: string;
@@ -45,9 +43,10 @@ export async function initAction(name?: string, options?: InitOptions): Promise<
 
   const wantsPrivate = options?.private || Boolean(options?.sealPolicy || options?.sealSecret);
   if (wantsPrivate) {
-    const policyId = options?.sealPolicy || generatePolicyId();
-    repoCfg.seal_policy_id = policyId;
-    await ensureSealSecret(policyId, {repoRoot: cwd, secret: options?.sealSecret, createIfMissing: true});
+    // We mark it as pending. The actual policy ID will be generated on-chain during 'wit push'.
+    repoCfg.seal_policy_id = 'pending';
+    // eslint-disable-next-line no-console
+    console.log('Initialized as PRIVATE repository. Encryption will be enabled on first push.');
   }
 
   await writeConfigIfMissing(path.join(witDir, 'config.json'), repoCfg);
@@ -93,12 +92,6 @@ async function readGlobalConfig(): Promise<GlobalConfig> {
 }
 
 function buildRepoConfig(repoName: string, globalCfg: GlobalConfig, activeAddress?: string | null): RepoConfig {
-  const author =
-    globalCfg.author && globalCfg.author !== 'unknown'
-      ? globalCfg.author
-      : activeAddress && activeAddress.length
-        ? activeAddress
-        : 'unknown';
   return {
     repo_name: repoName,
     repo_id: null,
@@ -109,10 +102,6 @@ function buildRepoConfig(repoName: string, globalCfg: GlobalConfig, activeAddres
     seal_policy_id: null,
     created_at: new Date().toISOString(),
   };
-}
-
-function generatePolicyId(): string {
-  return crypto.randomBytes(16).toString('hex');
 }
 
 async function writeConfigIfMissing(file: string, cfg: RepoConfig): Promise<void> {

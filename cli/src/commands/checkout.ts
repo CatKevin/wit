@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { SuiClient } from '@mysten/sui/client';
 import {
   ensureDirForFile,
   readBlob,
@@ -9,14 +10,15 @@ import {
   removeFileIfExists,
   blobFileName,
 } from '../lib/fs';
-import {readCommitById, readHeadRefPath} from '../lib/state';
-import {ManifestSchema} from '../lib/schema';
-import {computeRootHash} from '../lib/manifest';
-import {WalrusService} from '../lib/walrus';
-import {colors} from '../lib/ui';
-import {sha256Base64} from '../lib/serialize';
-import {readRepoConfig} from '../lib/repo';
-import {decryptWithSeal, ensureSealSecret, type SealKey} from '../lib/seal';
+import { readCommitById, readHeadRefPath } from '../lib/state';
+import { ManifestSchema } from '../lib/schema';
+import { computeRootHash } from '../lib/manifest';
+import { WalrusService, resolveWalrusConfig } from '../lib/walrus';
+import { colors } from '../lib/ui';
+import { sha256Base64 } from '../lib/serialize';
+import { readRepoConfig } from '../lib/repo';
+import { decryptWithSeal } from '../lib/seal';
+import { loadSigner } from '../lib/keys';
 
 const WIT_DIR = '.wit';
 
@@ -105,7 +107,7 @@ async function resolveFilesForCommit(witPath: string, commit: any, sealPolicyId:
     Object.fromEntries(
       Object.entries(manifest.files).map(([rel, meta]) => [
         rel,
-        {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+        { hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime },
       ])
     )
   );
@@ -133,45 +135,62 @@ async function loadManifest(witPath: string, manifestId: string) {
   console.log(colors.cyan(`Fetching manifest ${manifestId} from Walrus...`));
   const buf = Buffer.from(await walrusSvc.readBlob(manifestId));
   const manifest = ManifestSchema.parse(JSON.parse(buf.toString('utf8')));
-  await fs.mkdir(path.dirname(file), {recursive: true});
+  await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, buf.toString('utf8'), 'utf8');
   return manifest;
 }
 
 async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolicyId: string | null): Promise<boolean> {
   const entries = Object.entries(manifest.files) as [string, any][];
-  const missing: {rel: string; meta: any}[] = [];
+  const missing: { rel: string; meta: any }[] = [];
   for (const [rel, meta] of entries) {
     const buf = await readBlob(witPath, meta.hash);
     if (!buf) {
-      missing.push({rel, meta});
+      missing.push({ rel, meta });
     }
   }
   if (!missing.length) return true;
   const walrusSvc = await WalrusService.fromRepo();
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`Fetching ${missing.length} missing blobs from Walrus...`));
-  let seal: SealKey | null = null;
+
+  // Setup for decryption if needed
+  let signerInfo: any = null;
+  let suiClient: SuiClient | null = null;
+
   const hasEncrypted = entries.some(([, meta]) => meta.enc);
   if (hasEncrypted) {
-    const policy = entries.find(([, meta]) => meta.enc)?.[1]?.enc?.policy || sealPolicyId;
-    if (!policy) {
-      throw new Error('Encrypted files detected but no seal policy id provided.');
-    }
-    seal = await ensureSealSecret(policy, {repoRoot: process.cwd(), createIfMissing: false});
-    // eslint-disable-next-line no-console
-    console.log(colors.cyan(`Seal detected: decrypting files with policy ${policy}.`));
+    signerInfo = await loadSigner();
+    const resolved = await resolveWalrusConfig(process.cwd());
+    suiClient = new SuiClient({ url: resolved.suiRpcUrl });
   }
-  for (const {rel, meta} of missing) {
-    const data = await fetchFileBytes(walrusSvc, manifest, rel, meta, seal);
+
+  for (const { rel, meta } of missing) {
+    const data = await fetchFileBytes(walrusSvc, manifest, rel, meta);
     let plain: Buffer;
     try {
-      plain = seal && meta.enc ? decryptWithSeal(data, meta.enc, seal) : data;
+      if (meta.enc) {
+        if (!signerInfo || !suiClient) {
+          throw new Error('Internal error: signer/client not initialized for decryption');
+        }
+        const encAny = meta.enc as any;
+        const encMeta = {
+          alg: encAny.alg || encAny.enc_alg,
+          policy_id: encAny.policy_id || encAny.enc_policy,
+          package_id: encAny.package_id || encAny.enc_package || '0x0',
+          sealed_session_key: encAny.sealed_session_key || encAny.enc_sealed_key,
+          iv: encAny.iv || encAny.enc_iv,
+          tag: encAny.tag || encAny.enc_tag,
+        };
+        plain = await decryptWithSeal(data, encMeta as any, signerInfo.signer, suiClient);
+      } else {
+        plain = data;
+      }
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.log(
         colors.red(
-          `Seal decryption failed for ${rel}. Check WIT_SEAL_SECRET (policy ${meta.enc?.policy || sealPolicyId || 'unknown'}).`
+          `Seal decryption failed for ${rel}. Check if you are whitelisted.`
         )
       );
       return false;
@@ -195,8 +214,7 @@ async function fetchFileBytes(
   walrusSvc: WalrusService,
   manifest: any,
   rel: string,
-  meta: {id?: string; hash: string; size: number; enc?: any},
-  seal?: SealKey | null
+  meta: { id?: string; hash: string; size: number; enc?: any },
 ): Promise<Buffer> {
   if (manifest.quilt_id) {
     try {
@@ -207,7 +225,7 @@ async function fetchFileBytes(
     }
   }
   if (meta.id) {
-    const files = await walrusSvc.getClient().getFiles({ids: [meta.id]});
+    const files = await walrusSvc.getClient().getFiles({ ids: [meta.id] });
     const data = Buffer.from(await files[0].bytes());
     const tags = await files[0].getTags();
     if (tags?.hash && tags.hash !== meta.hash) {

@@ -1,75 +1,139 @@
+import { SealClient } from '@mysten/seal';
+import { SessionKey } from '@mysten/seal';
+import { type WalletAccount } from '@mysten/wallet-standard';
+import { Transaction } from '@mysten/sui/transactions';
+import { SuiClient } from '@mysten/sui/client';
+
 export type EncryptionMeta = {
-    alg: 'aes-256-gcm';
-    iv: string;
-    tag: string;
-    policy?: string;
-    cipher_size?: number;
+    alg: 'seal-aes-256-gcm';
+    policy_id: string;
+    package_id: string;
+    sealed_session_key: string; // base64
+    iv: string; // base64
+    tag: string; // base64
 };
 
-const LOCAL_PREFIX = 'wit.seal.secret.';
-const SALT = 'wit-seal';
+const SEAL_SERVERS = [
+    {
+        objectId: '0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75',
+        weight: 1,
+    },
+    {
+        objectId: '0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8',
+        weight: 1,
+    },
+    {
+        objectId: '0x6068c0acb197dddbacd4746a9de7f025b2ed5a5b6c1b1ab44dade4426d141da2',
+        weight: 1,
+    }
+];
 
-const cryptoApi = typeof globalThis !== 'undefined' ? (globalThis.crypto as Crypto | undefined) : undefined;
+let _sealClient: SealClient | null = null;
+
+export function getSealClient(suiClient: SuiClient): SealClient {
+    if (!_sealClient) {
+        _sealClient = new SealClient({
+            serverConfigs: SEAL_SERVERS,
+            suiClient: suiClient as any,
+        });
+    }
+    return _sealClient;
+}
 
 function base64ToBytes(b64: string): Uint8Array {
-    if (typeof atob === 'function') {
-        return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const binString = atob(b64);
+    return Uint8Array.from(binString, (c) => c.charCodeAt(0));
+}
+
+function fromHex(hex: string): Uint8Array {
+    if (hex.startsWith('0x')) hex = hex.slice(2);
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
     }
-    throw new Error('Base64 decode is not available in this environment');
+    return bytes;
 }
 
-function concat(a: ArrayBuffer, b: ArrayBuffer): ArrayBuffer {
-    const out = new Uint8Array(a.byteLength + b.byteLength);
-    out.set(new Uint8Array(a), 0);
-    out.set(new Uint8Array(b), a.byteLength);
-    return out.buffer;
-}
 
-function getStoredSecret(policyId: string): string | null {
-    if (typeof localStorage === 'undefined') return null;
-    return localStorage.getItem(LOCAL_PREFIX + policyId) || null;
-}
 
-function storeSecret(policyId: string, secret: string) {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(LOCAL_PREFIX + policyId, secret);
-}
-
-export async function requireSealSecret(policyId: string): Promise<string> {
-    const existing = getStoredSecret(policyId);
-    if (existing) return existing;
-    if (typeof window === 'undefined' || typeof window.prompt !== 'function') {
-        throw new Error('Cannot prompt for secret in this environment; retry in a browser with prompt support.');
-    }
-    const input = window.prompt(`Enter secret for policy ${policyId} to decrypt files:`);
-    if (!input) {
-        throw new Error('Secret not provided; cannot decrypt protected files.');
-    }
-    storeSecret(policyId, input.trim());
-    return input.trim();
-}
-
-async function deriveKey(secret: string, policyId: string): Promise<CryptoKey> {
-    if (!cryptoApi || !cryptoApi.subtle) {
-        throw new Error('WebCrypto not available; cannot decrypt.');
-    }
-    const enc = new TextEncoder();
-    const material = await cryptoApi.subtle.digest('SHA-256', enc.encode(`${SALT}:${policyId}:${secret}`));
-    return cryptoApi.subtle.importKey('raw', material, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
-}
-
-export async function decryptToText(cipher: ArrayBuffer, meta: EncryptionMeta, policyId: string): Promise<string> {
-    if (meta.alg !== 'aes-256-gcm') {
+export async function decryptToText(
+    cipher: ArrayBuffer,
+    meta: EncryptionMeta,
+    account: WalletAccount,
+    signTransaction: (input: { transaction: Transaction }) => Promise<{ bytes: string; signature: string }>,
+    suiClient: SuiClient
+): Promise<string> {
+    if (meta.alg !== 'seal-aes-256-gcm') {
         throw new Error(`Unsupported encryption algorithm: ${meta.alg}`);
     }
-    if (!cryptoApi || !cryptoApi.subtle) {
-        throw new Error('WebCrypto not available; cannot decrypt.');
-    }
-    const secret = await requireSealSecret(policyId);
-    const key = await deriveKey(secret, policyId);
+
+    const client = getSealClient(suiClient);
+    const sealedKey = base64ToBytes(meta.sealed_session_key);
+
+    // Adapter to satisfy Seal SDK Signer interface
+    const signerAdapter = {
+        getPublicKey: () => ({
+            toSuiAddress: () => account.address,
+            toRawBytes: () => account.publicKey,
+        }),
+        signTransaction: async (input: { transaction: Transaction }) => {
+            return signTransaction(input);
+        },
+    };
+
+    // 1. Create Ephemeral Session Key
+    const sessionKey = await SessionKey.create({
+        address: account.address,
+        packageId: meta.package_id,
+        ttlMin: 10,
+        signer: signerAdapter as any,
+        suiClient: suiClient as any,
+    });
+
+    // 2. Construct Transaction
+    const tx = new Transaction();
+    tx.setSender(account.address);
+    const policyIdBytes = fromHex(meta.policy_id);
+
+    tx.moveCall({
+        target: `${meta.package_id}::whitelist::seal_approve`,
+        arguments: [
+            tx.pure.vector('u8', policyIdBytes),
+            tx.object(meta.policy_id),
+        ],
+    });
+
+    // 3. Sign Transaction
+    const { bytes } = await signTransaction({ transaction: tx });
+
+    // 4. Unseal Session Key
+    const sessionKeyBytes = await client.decrypt({
+        data: sealedKey,
+        sessionKey,
+        txBytes: typeof bytes === 'string' ? base64ToBytes(bytes) : bytes,
+    });
+
+    // 5. Decrypt Data
+    const key = await crypto.subtle.importKey(
+        'raw',
+        sessionKeyBytes,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['decrypt']
+    );
+
     const iv = base64ToBytes(meta.iv);
     const tag = base64ToBytes(meta.tag);
-    const combined = concat(cipher, tag.buffer);
-    const plain = await cryptoApi.subtle.decrypt({ name: 'AES-GCM', iv }, key, combined);
-    return new TextDecoder().decode(new Uint8Array(plain));
+
+    const combined = new Uint8Array(cipher.byteLength + tag.byteLength);
+    combined.set(new Uint8Array(cipher), 0);
+    combined.set(tag, cipher.byteLength);
+
+    const plain = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        combined
+    );
+
+    return new TextDecoder().decode(plain);
 }

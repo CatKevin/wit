@@ -1,21 +1,22 @@
 import fs from 'fs/promises';
 import path from 'path';
-import {SuiClient} from '@mysten/sui/client';
-import {WalrusFile} from '@mysten/walrus';
-import type {Signer} from '@mysten/sui/cryptography';
-import {colors} from '../lib/ui';
-import {computeRootHash} from '../lib/manifest';
-import {canonicalStringify, sha256Base64} from '../lib/serialize';
-import {ensureDirForFile, readBlob} from '../lib/fs';
-import {readCommitById, readCommitIdMap, readHeadRefPath, readRef, writeCommitIdMap, idToFileName, type CommitObject} from '../lib/state';
-import {readRepoConfig, writeRepoConfig, writeRemoteState, requireWitDir, writeRemoteRef} from '../lib/repo';
-import {WalrusService, resolveWalrusConfig} from '../lib/walrus';
-import {loadSigner, checkResources} from '../lib/keys';
-import {fetchRepositoryStateWithRetry, createRepository, updateRepositoryHead, setSealPolicy} from '../lib/suiRepo';
-import {ManifestSchema, type Manifest} from '../lib/schema';
-import {encryptWithSeal, ensureSealSecret, type SealKey} from '../lib/seal';
+import { SuiClient } from '@mysten/sui/client';
+import { WalrusFile } from '@mysten/walrus';
+import type { Signer } from '@mysten/sui/cryptography';
+import { colors } from '../lib/ui';
+import { computeRootHash } from '../lib/manifest';
+import { canonicalStringify, sha256Base64 } from '../lib/serialize';
+import { ensureDirForFile, readBlob } from '../lib/fs';
+import { readCommitById, readCommitIdMap, readHeadRefPath, readRef, writeCommitIdMap, idToFileName, type CommitObject } from '../lib/state';
+import { readRepoConfig, writeRepoConfig, writeRemoteState, requireWitDir, writeRemoteRef } from '../lib/repo';
+import { WalrusService, resolveWalrusConfig } from '../lib/walrus';
+import { loadSigner, checkResources } from '../lib/keys';
+import { fetchRepositoryStateWithRetry, createRepository, updateRepositoryHead } from '../lib/suiRepo';
+import { ManifestSchema, type Manifest } from '../lib/schema';
+import { encryptWithSeal } from '../lib/seal';
+import { WIT_PACKAGE_ID } from '../lib/constants';
 
-type CommitWithId = {id: string; commit: CommitObject};
+type CommitWithId = { id: string; commit: CommitObject };
 type CommitFileMeta = CommitObject['tree']['files'][string];
 
 export async function pushAction(): Promise<void> {
@@ -39,34 +40,20 @@ export async function pushAction(): Promise<void> {
     throw new Error('HEAD root_hash does not match file list. Re-commit or fix index.');
   }
 
-  let seal: SealKey | null = null;
-  if (repoCfg.seal_policy_id) {
-    try {
-      seal = await ensureSealSecret(repoCfg.seal_policy_id, {repoRoot: process.cwd(), createIfMissing: false});
-    } catch (err: any) {
-      // eslint-disable-next-line no-console
-      console.log(colors.red(`Seal policy set but secret missing: ${err?.message || err}.`));
-      // eslint-disable-next-line no-console
-      console.log(colors.red('Set WIT_SEAL_SECRET or place .wit/seal/<policy>.secret, then retry push.'));
-      return;
-    }
-    // eslint-disable-next-line no-console
-    console.log(colors.cyan(`Seal enabled: files will be encrypted with policy ${repoCfg.seal_policy_id}.`));
-  }
-
   const commitMap = await readCommitIdMap(witPath);
-  const {chain, baseRemoteId} = await collectChain(witPath, headId, commitMap);
+  const { chain, baseRemoteId } = await collectChain(witPath, headId, commitMap);
 
   const resolved = await resolveWalrusConfig(process.cwd());
-  const suiClient = new SuiClient({url: resolved.suiRpcUrl});
+  const suiClient = new SuiClient({ url: resolved.suiRpcUrl });
   let createdRepo = false;
 
   let repoId = repoCfg.repo_id;
   if (!repoId) {
+    const isPrivate = repoCfg.seal_policy_id === 'pending' || !!repoCfg.seal_policy_id;
     repoId = await createRepository(suiClient, signerInfo.signer, {
       name: repoCfg.repo_name,
       description: repoCfg.repo_name,
-      sealPolicyId: repoCfg.seal_policy_id,
+      isPrivate: isPrivate,
     });
     repoCfg.repo_id = repoId;
     createdRepo = true;
@@ -77,9 +64,15 @@ export async function pushAction(): Promise<void> {
 
   const onchainState = await fetchRepositoryStateWithRetry(suiClient, repoId);
 
-  if (repoCfg.seal_policy_id && onchainState.sealPolicyId !== repoCfg.seal_policy_id) {
-    await setSealPolicy(suiClient, signerInfo.signer, {repoId, policyId: repoCfg.seal_policy_id});
+  // Update local seal policy ID if it was pending or changed
+  if (onchainState.sealPolicyId && repoCfg.seal_policy_id !== onchainState.sealPolicyId) {
+    repoCfg.seal_policy_id = onchainState.sealPolicyId;
+    await writeRepoConfig(witPath, repoCfg);
+    // eslint-disable-next-line no-console
+    console.log(colors.cyan(`Seal policy updated from chain: ${onchainState.sealPolicyId}`));
   }
+
+  const currentPolicyId = repoCfg.seal_policy_id === 'pending' ? null : repoCfg.seal_policy_id;
 
   if (onchainState.headCommit && baseRemoteId !== onchainState.headCommit) {
     throw new Error('Remote head diverges from local history; run `wit pull`/`fetch` or reset first.');
@@ -112,13 +105,13 @@ export async function pushAction(): Promise<void> {
   let lastManifestId: string | null = null;
   let lastQuiltId: string | null = null;
   let lastCommitRemoteId: string | null = null;
-  const nextMap = {...commitMap};
+  const nextMap = { ...commitMap };
 
   for (let i = 0; i < chain.length; i += 1) {
     const item = chain[i];
     // eslint-disable-next-line no-console
     console.log(colors.cyan(`Uploading commit ${i + 1}/${chain.length}: ${item.id}`));
-    const uploaded = await uploadCommitSnapshot(witPath, item.id, item.commit, parentRemoteId, walrusSvc, signerInfo.signer, seal);
+    const uploaded = await uploadCommitSnapshot(witPath, item.id, item.commit, parentRemoteId, walrusSvc, signerInfo.signer, currentPolicyId, suiClient);
     if (!uploaded) {
       // Upload failed with friendly message already printed
       return;
@@ -177,14 +170,14 @@ async function collectChain(
   witPath: string,
   headId: string,
   map: Record<string, string | null>
-): Promise<{chain: CommitWithId[]; baseRemoteId: string | null}> {
+): Promise<{ chain: CommitWithId[]; baseRemoteId: string | null }> {
   const chain: CommitWithId[] = [];
   let cursor: string | null = headId;
   let baseRemoteId: string | null = null;
 
   while (cursor) {
     const commit = await readCommitById(witPath, cursor);
-    chain.unshift({id: cursor, commit});
+    chain.unshift({ id: cursor, commit });
     if (!commit.parent) {
       baseRemoteId = null;
       break;
@@ -197,7 +190,7 @@ async function collectChain(
     cursor = commit.parent;
   }
 
-  return {chain, baseRemoteId};
+  return { chain, baseRemoteId };
 }
 
 async function uploadCommitSnapshot(
@@ -207,12 +200,13 @@ async function uploadCommitSnapshot(
   parentRemoteId: string | null,
   walrusSvc: WalrusService,
   signer: Signer,
-  seal?: SealKey | null
-): Promise<{manifestId: string; quiltId: string; commitId: string} | null> {
+  policyId: string | null,
+  suiClient: SuiClient
+): Promise<{ manifestId: string; quiltId: string; commitId: string } | null> {
   // eslint-disable-next-line no-console
   console.log(colors.cyan('  Building and verifying file snapshot...'));
   const entries = Object.entries(commit.tree.files).sort((a, b) => a[0].localeCompare(b[0]));
-  const files: {rel: string; meta: CommitFileMeta; data: Buffer}[] = [];
+  const files: { rel: string; meta: CommitFileMeta; data: Buffer }[] = [];
 
   for (const [rel, meta] of entries) {
     const buf = await readBlob(witPath, meta.hash);
@@ -223,14 +217,15 @@ async function uploadCommitSnapshot(
     if (computed !== meta.hash || buf.length !== meta.size) {
       throw new Error(`File verification failed for ${rel}; re-add and retry.`);
     }
-    files.push({rel, meta, data: buf});
+    files.push({ rel, meta, data: buf });
   }
 
-  const walrusBlobs = files.map(({rel, data, meta}) => {
+  // Prepare blobs (encrypt if policyId is present)
+  const walrusBlobs = await Promise.all(files.map(async ({ rel, data, meta }) => {
     let contents = data;
     let enc: any | undefined;
-    if (seal) {
-      const encrypted = encryptWithSeal(data, seal);
+    if (policyId) {
+      const encrypted = await encryptWithSeal(data, policyId, WIT_PACKAGE_ID, suiClient);
       contents = encrypted.cipher;
       enc = encrypted.meta;
     }
@@ -244,19 +239,22 @@ async function uploadCommitSnapshot(
         mtime: String(meta.mtime),
         ...(enc
           ? {
-              enc_alg: enc.alg,
-              enc_iv: enc.iv,
-              enc_tag: enc.tag,
-              enc_policy: enc.policy || seal?.policyId,
-              enc_size: String(enc.cipher_size || contents.length),
-            }
+            enc_alg: enc.alg,
+            enc_iv: enc.iv,
+            enc_tag: enc.tag,
+            enc_policy: enc.policy_id,
+            enc_package: enc.package_id,
+            enc_sealed_key: enc.sealed_session_key,
+            enc_size: String(contents.length),
+          }
           : {}),
       },
       enc,
     };
-  });
+  }));
+
   const encMetas = walrusBlobs.map((b: any) => b.enc);
-  const walrusInputs = walrusBlobs.map(({contents, identifier, tags}) => ({contents, identifier, tags}));
+  const walrusInputs = walrusBlobs.map(({ contents, identifier, tags }) => ({ contents, identifier, tags }));
 
   const quiltRes = await tryWithRetry(() =>
     walrusSvc.writeQuilt({
@@ -278,7 +276,7 @@ async function uploadCommitSnapshot(
     })
   );
   const filesRes = await tryWithRetry(() =>
-    walrusSvc.getClient().writeFiles({files: walrusFiles, signer, epochs: 1, deletable: true})
+    walrusSvc.getClient().writeFiles({ files: walrusFiles, signer, epochs: 1, deletable: true })
   );
   if (!filesRes) return null;
   // eslint-disable-next-line no-console
@@ -294,14 +292,14 @@ async function uploadCommitSnapshot(
     quilt_id: quiltRes.quiltId,
     root_hash: rootHash,
     files: Object.fromEntries(
-      files.map(({rel, meta}, idx) => {
+      files.map(({ rel, meta }, idx) => {
         const enc = encMetas[idx] as any;
         return [
           rel,
           {
             ...meta,
             id: (filesRes[idx] as any)?.id || (filesRes[idx] as any)?.blobId || (filesRes[idx] as any)?.blob_id || '',
-            ...(enc ? {enc: enc} : {}),
+            ...(enc ? { enc: enc } : {}),
           },
         ];
       })
@@ -331,10 +329,10 @@ async function uploadCommitSnapshot(
     message: commit.message,
     timestamp: commit.timestamp,
     extras: {
-      ...(commit.extras || {patch_id: null, tags: {}}),
+      ...(commit.extras || { patch_id: null, tags: {} }),
       tags: {
         ...(commit.extras?.tags || {}),
-        ...(seal?.policyId ? {seal_policy_id: seal.policyId} : {}),
+        ...(policyId ? { seal_policy_id: policyId } : {}),
       },
     },
   };
@@ -350,7 +348,7 @@ async function uploadCommitSnapshot(
   console.log(colors.cyan(`  Remote commit uploaded: ${remoteCommitId}`));
   await cacheJson(path.join(witPath, 'objects', 'commits', `${idToFileName(remoteCommitId)}.json`), remoteSerialized);
 
-  return {manifestId, quiltId: quiltRes.quiltId, commitId: remoteCommitId};
+  return { manifestId, quiltId: quiltRes.quiltId, commitId: remoteCommitId };
 }
 
 async function tryWithRetry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 1200): Promise<T | null> {
@@ -385,7 +383,7 @@ async function ensureAuthorOrSetDefault(witPath: string, repoCfg: any, signerAdd
   const current = (repoCfg.author || '').trim().toLowerCase();
   const signer = signerAddress.toLowerCase();
   if (!current || current === 'unknown') {
-    const next = {...repoCfg, author: signerAddress};
+    const next = { ...repoCfg, author: signerAddress };
     await writeRepoConfig(witPath, next);
     // eslint-disable-next-line no-console
     console.log(colors.cyan(`Author set to active address ${signerAddress}`));

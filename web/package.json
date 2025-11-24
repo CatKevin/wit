@@ -12,6 +12,7 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@mysten/dapp-kit": "^0.14.53",
+    "@mysten/seal": "^0.9.4",
     "@mysten/sui": "^1.45.0",
     "@mysten/walrus": "^0.8.4",
     "@radix-ui/react-dialog": "^1.1.15",

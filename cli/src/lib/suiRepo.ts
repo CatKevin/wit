@@ -51,7 +51,7 @@ function getSignerAddress(signer: Signer): string {
 export async function createRepository(
   client: SuiClient,
   signer: Signer,
-  params: { name: string; description?: string; sealPolicyId?: string | null; packageId?: string; moduleName?: string }
+  params: { name: string; description?: string; isPrivate: boolean; packageId?: string; moduleName?: string }
 ): Promise<string> {
   const pkg = params.packageId || WIT_PACKAGE_ID;
   const mod = params.moduleName || WIT_MODULE_NAME;
@@ -62,11 +62,12 @@ export async function createRepository(
     arguments: [
       tx.pure.vector('u8', utf8ToVec(params.name)),
       tx.pure.vector('u8', utf8ToVec(params.description || '')),
-      tx.pure.option('vector<u8>', params.sealPolicyId ? utf8ToVec(params.sealPolicyId) : null),
+      tx.pure.bool(params.isPrivate),
     ],
   });
   const res = await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
   const created = (res as any)?.effects?.created || [];
+  // Find the shared object (Repository)
   const shared = created.find((c: any) => c?.owner?.Shared !== undefined) || created[0];
   const objectId =
     shared?.reference?.objectId ||
@@ -151,63 +152,74 @@ export async function fetchRepositoryStateWithRetry(
 export async function addCollaborator(
   client: SuiClient,
   signer: Signer,
-  params: { repoId: string; collaborator: string; packageId?: string; moduleName?: string }
+  params: { repoId: string; collaborator: string; whitelistId?: string; packageId?: string; moduleName?: string }
 ): Promise<void> {
   const pkg = params.packageId || WIT_PACKAGE_ID;
   const mod = params.moduleName || WIT_MODULE_NAME;
   const tx = new Transaction();
   tx.setSenderIfNotSet(getSignerAddress(signer));
-  tx.moveCall({
-    target: `${pkg}::${mod}::add_collaborator`,
-    arguments: [tx.object(params.repoId), tx.pure.address(params.collaborator)],
-  });
+
+  if (params.whitelistId) {
+    tx.moveCall({
+      target: `${pkg}::${mod}::add_private_collaborator`,
+      arguments: [tx.object(params.repoId), tx.object(params.whitelistId), tx.pure.address(params.collaborator)],
+    });
+  } else {
+    tx.moveCall({
+      target: `${pkg}::${mod}::add_collaborator`,
+      arguments: [tx.object(params.repoId), tx.pure.address(params.collaborator)],
+    });
+  }
+
   await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
 }
 
 export async function transferOwnership(
   client: SuiClient,
   signer: Signer,
-  params: { repoId: string; newOwner: string; packageId?: string; moduleName?: string }
+  params: { repoId: string; newOwner: string; whitelistId?: string; packageId?: string; moduleName?: string }
 ): Promise<void> {
   const pkg = params.packageId || WIT_PACKAGE_ID;
   const mod = params.moduleName || WIT_MODULE_NAME;
   const tx = new Transaction();
   tx.setSenderIfNotSet(getSignerAddress(signer));
-  tx.moveCall({
-    target: `${pkg}::${mod}::transfer_ownership`,
-    arguments: [tx.object(params.repoId), tx.pure.address(params.newOwner)],
-  });
+
+  if (params.whitelistId) {
+    tx.moveCall({
+      target: `${pkg}::${mod}::transfer_ownership_private`,
+      arguments: [tx.object(params.repoId), tx.object(params.whitelistId), tx.pure.address(params.newOwner)],
+    });
+  } else {
+    tx.moveCall({
+      target: `${pkg}::${mod}::transfer_ownership`,
+      arguments: [tx.object(params.repoId), tx.pure.address(params.newOwner)],
+    });
+  }
+
   await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
 }
 
 export async function removeCollaborator(
   client: SuiClient,
   signer: Signer,
-  params: { repoId: string; collaborator: string; packageId?: string; moduleName?: string }
+  params: { repoId: string; collaborator: string; whitelistId?: string; packageId?: string; moduleName?: string }
 ): Promise<void> {
   const pkg = params.packageId || WIT_PACKAGE_ID;
   const mod = params.moduleName || WIT_MODULE_NAME;
   const tx = new Transaction();
   tx.setSenderIfNotSet(getSignerAddress(signer));
-  tx.moveCall({
-    target: `${pkg}::${mod}::remove_collaborator`,
-    arguments: [tx.object(params.repoId), tx.pure.address(params.collaborator)],
-  });
-  await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
-}
 
-export async function setSealPolicy(
-  client: SuiClient,
-  signer: Signer,
-  params: { repoId: string; policyId: string | null; packageId?: string; moduleName?: string }
-): Promise<void> {
-  const pkg = params.packageId || WIT_PACKAGE_ID;
-  const mod = params.moduleName || WIT_MODULE_NAME;
-  const tx = new Transaction();
-  tx.setSenderIfNotSet(getSignerAddress(signer));
-  tx.moveCall({
-    target: `${pkg}::${mod}::set_seal_policy`,
-    arguments: [tx.object(params.repoId), tx.pure.option('vector<u8>', params.policyId ? utf8ToVec(params.policyId) : null)],
-  });
+  if (params.whitelistId) {
+    tx.moveCall({
+      target: `${pkg}::${mod}::remove_private_collaborator`,
+      arguments: [tx.object(params.repoId), tx.object(params.whitelistId), tx.pure.address(params.collaborator)],
+    });
+  } else {
+    tx.moveCall({
+      target: `${pkg}::${mod}::remove_collaborator`,
+      arguments: [tx.object(params.repoId), tx.pure.address(params.collaborator)],
+    });
+  }
+
   await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
 }

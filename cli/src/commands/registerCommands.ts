@@ -117,7 +117,7 @@ export function registerCommands(program: Command): void {
     .description('Add a collaborator to the repository')
     .option('--seal-policy <id>', 'Seal policy id to apply (defaults to repo config)')
     .option('--seal-secret <secret>', 'Seal secret to save locally when setting policy')
-    .action((address: string, opts: { sealPolicy?: string; sealSecret?: string }) => inviteAction(address, opts));
+    .action((address: string) => inviteAction(address));
 
   program
     .command('transfer <new_owner>')

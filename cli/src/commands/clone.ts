@@ -1,24 +1,25 @@
 import fs from 'fs/promises';
 import path from 'path';
-import {SuiClient} from '@mysten/sui/client';
-import {colors} from '../lib/ui';
-import {WalrusService, resolveWalrusConfig} from '../lib/walrus';
-import {fetchRepositoryStateWithRetry} from '../lib/suiRepo';
-import {ManifestSchema, type Manifest} from '../lib/schema';
-import {computeRootHash} from '../lib/manifest';
-import {canonicalStringify, sha256Base64} from '../lib/serialize';
-import {ensureDirForFile, writeIndex, type Index} from '../lib/fs';
-import {idToFileName, writeCommitIdMap, readCommitIdMap} from '../lib/state';
-import {writeRemoteRef, writeRemoteState, writeRepoConfig} from '../lib/repo';
-import {ensureSealSecret, decryptWithSeal, type SealKey} from '../lib/seal';
+import { SuiClient } from '@mysten/sui/client';
+import { colors } from '../lib/ui';
+import { WalrusService, resolveWalrusConfig } from '../lib/walrus';
+import { fetchRepositoryStateWithRetry } from '../lib/suiRepo';
+import { ManifestSchema, type Manifest } from '../lib/schema';
+import { computeRootHash } from '../lib/manifest';
+import { canonicalStringify, sha256Base64 } from '../lib/serialize';
+import { ensureDirForFile, writeIndex, type Index } from '../lib/fs';
+import { idToFileName, writeCommitIdMap, readCommitIdMap } from '../lib/state';
+import { writeRemoteRef, writeRemoteState, writeRepoConfig } from '../lib/repo';
+import { decryptWithSeal } from '../lib/seal';
+import { loadSigner } from '../lib/keys';
 
 type RemoteCommit = {
-  tree: {root_hash: string; manifest_id: string | null; quilt_id: string | null};
+  tree: { root_hash: string; manifest_id: string | null; quilt_id: string | null };
   parent: string | null;
   author: string;
   message: string;
   timestamp: number;
-  extras?: {patch_id?: string | null; tags?: Record<string, string>};
+  extras?: { patch_id?: string | null; tags?: Record<string, string> };
 };
 
 const DEFAULT_RELAYS = ['https://upload-relay.testnet.walrus.space'];
@@ -33,8 +34,9 @@ export async function cloneAction(repoId: string): Promise<void> {
   // Prepare .wit layout and config
   const witPath = await ensureLayout(process.cwd(), repoId);
   const resolved = await resolveWalrusConfig(process.cwd());
-  const suiClient = new SuiClient({url: resolved.suiRpcUrl});
+  const suiClient = new SuiClient({ url: resolved.suiRpcUrl });
   const walrusSvc = await WalrusService.fromRepo();
+  const signerInfo = await loadSigner();
 
   // Fetch on-chain head
   const onchain = await fetchRepositoryStateWithRetry(suiClient, repoId);
@@ -53,7 +55,7 @@ export async function cloneAction(repoId: string): Promise<void> {
     Object.fromEntries(
       Object.entries(manifest.files).map(([rel, meta]) => [
         rel,
-        {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+        { hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime },
       ]),
     ),
   );
@@ -74,22 +76,10 @@ export async function cloneAction(repoId: string): Promise<void> {
     }
   }
 
-  let seal: SealKey | null = null;
   const sealPolicyId = onchain.sealPolicyId || null;
   const hasEncrypted = Object.values(manifest.files).some((meta: any) => meta.enc);
-  if (hasEncrypted) {
-    if (!sealPolicyId) {
-      throw new Error('Encrypted repository detected but no seal policy id on chain.');
-    }
-    try {
-      seal = await ensureSealSecret(sealPolicyId, {repoRoot: process.cwd(), createIfMissing: false});
-    } catch (err: any) {
-      // eslint-disable-next-line no-console
-      console.log(colors.red(`Missing seal secret for policy ${sealPolicyId}: ${err?.message || err}`));
-      // eslint-disable-next-line no-console
-      console.log(colors.red('Set WIT_SEAL_SECRET or .wit/seal/<policy>.secret then retry clone.'));
-      return;
-    }
+  if (hasEncrypted && !sealPolicyId) {
+    throw new Error('Encrypted repository detected but no seal policy id on chain.');
   }
 
   // Download remote commit
@@ -113,14 +103,30 @@ export async function cloneAction(repoId: string): Promise<void> {
     const data = await fetchFileBytes(walrusSvc, manifest, rel, meta);
     let plain: Buffer;
     try {
-      plain = meta.enc ? decryptWithSeal(data, meta.enc, seal!) : data;
+      if (meta.enc) {
+        // Map metadata to EncryptionMeta
+        const encAny = meta.enc as any;
+        const encMeta = {
+          alg: encAny.alg || encAny.enc_alg,
+          policy_id: encAny.policy_id || encAny.enc_policy,
+          package_id: encAny.package_id || encAny.enc_package || '0x0', // Fallback or read from meta
+          sealed_session_key: encAny.sealed_session_key || encAny.enc_sealed_key,
+          iv: encAny.iv || encAny.enc_iv,
+          tag: encAny.tag || encAny.enc_tag,
+        };
+        plain = await decryptWithSeal(data, encMeta as any, signerInfo.signer, suiClient);
+      } else {
+        plain = data;
+      }
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.log(
         colors.red(
-          `Seal decryption failed for ${rel}. Check WIT_SEAL_SECRET (policy ${meta.enc?.policy || sealPolicyId || 'unknown'}).`
+          `Seal decryption failed for ${rel}. Ensure you are whitelisted for policy ${(meta.enc as any)?.policy_id || sealPolicyId}.`
         )
       );
+      // eslint-disable-next-line no-console
+      console.log(colors.red(`Error: ${err.message}`));
       return;
     }
     const hash = sha256Base64(plain);
@@ -132,7 +138,7 @@ export async function cloneAction(repoId: string): Promise<void> {
     await fs.writeFile(abs, plain);
     const mode = parseInt(meta.mode, 10) & 0o777;
     await fs.chmod(abs, mode);
-    index[rel] = {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime};
+    index[rel] = { hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime };
   }
 
   // Write index and refs/state
@@ -164,7 +170,7 @@ async function fetchFileBytes(
   walrusSvc: WalrusService,
   manifest: Manifest,
   rel: string,
-  meta: {id?: string; hash: string; size: number; enc?: any}
+  meta: { id?: string; hash: string; size: number; enc?: any }
 ): Promise<Buffer> {
   // Prefer quilt fetch when quilt_id is present; fallback to direct file id
   if (manifest.quilt_id) {
@@ -177,7 +183,7 @@ async function fetchFileBytes(
   }
 
   if (meta.id) {
-    const files = await walrusSvc.getClient().getFiles({ids: [meta.id]});
+    const files = await walrusSvc.getClient().getFiles({ ids: [meta.id] });
     const file = files[0];
     const data = Buffer.from(await file.bytes());
     const tags = await file.getTags();
@@ -192,7 +198,7 @@ async function fetchFileBytes(
 
 async function ensureLayout(cwd: string, repoId: string): Promise<string> {
   const witPath = path.join(cwd, '.wit');
-  await fs.mkdir(witPath, {recursive: true});
+  await fs.mkdir(witPath, { recursive: true });
   const subdirs = [
     'refs/heads',
     'refs/remotes',
@@ -203,7 +209,7 @@ async function ensureLayout(cwd: string, repoId: string): Promise<string> {
     'objects/maps',
     'state',
   ];
-  await Promise.all(subdirs.map((d) => fs.mkdir(path.join(witPath, d), {recursive: true})));
+  await Promise.all(subdirs.map((d) => fs.mkdir(path.join(witPath, d), { recursive: true })));
 
   const cfgPath = path.join(witPath, 'config.json');
   try {
