@@ -4,6 +4,7 @@ import { NetworkSelector } from '@/components/layout/NetworkSelector';
 import Home from '@/pages/Home';
 import RepoDetail from '@/pages/RepoDetail';
 import CommitDetailPage from '@/pages/CommitDetailPage';
+import logo from '@/assets/logo.png';
 
 function App() {
   return (
@@ -11,9 +12,9 @@ function App() {
       <div className="min-h-screen bg-white text-slate-950 font-sans antialiased">
         <header className="border-b border-slate-200 p-4 sticky top-0 bg-white/80 backdrop-blur-sm z-10">
           <div className="container mx-auto flex justify-between items-center">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold">W</div>
-              <h1 className="text-xl font-bold">Withub Explorer</h1>
+            <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <img src={logo} alt="WIT Logo" className="h-8 w-8 object-contain" />
+              <h1 className="text-xl font-bold">WIT Explorer</h1>
             </Link>
 
             <div className="flex items-center gap-4">
