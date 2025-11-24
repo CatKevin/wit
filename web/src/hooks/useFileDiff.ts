@@ -23,12 +23,15 @@ export interface FileDiffResult {
  * @param change - The file change to compute diff for
  * @param currentQuiltId - Current commit's quilt ID for new file downloads
  * @param parentQuiltId - Parent commit's quilt ID for old file downloads
+ * @param _policyId - Kept for API compatibility, but not needed as enc contains policy_id
+ * @param isEnabled - Whether to actually fetch and compute the diff (to avoid unnecessary decryption)
  */
 export function useFileDiff(
     change: FileChange,
     currentQuiltId?: string,
     parentQuiltId?: string,
-    _policyId?: string // Kept for API compatibility, but not needed as enc contains policy_id
+    _policyId?: string, // Kept for API compatibility, but not needed as enc contains policy_id
+    isEnabled: boolean = true // Default to true for backward compatibility
 ): FileDiffResult {
     const { path, type, oldMeta, newMeta } = change;
     const suiClient = useSuiClient();
@@ -83,7 +86,7 @@ export function useFileDiff(
 
             throw new Error('No valid file reference found for old content');
         },
-        enabled: (type === 'modified' || type === 'deleted') && !isBinary && !!oldMeta,
+        enabled: isEnabled && (type === 'modified' || type === 'deleted') && !isBinary && !!oldMeta,
         staleTime: Infinity, // File contents are immutable
     });
 
@@ -131,12 +134,14 @@ export function useFileDiff(
 
             throw new Error('No valid file reference found for new content');
         },
-        enabled: (type === 'modified' || type === 'added') && !isBinary && !!newMeta,
+        enabled: isEnabled && (type === 'modified' || type === 'added') && !isBinary && !!newMeta,
         staleTime: Infinity, // File contents are immutable
     });
 
     // Compute line diff
     const lineDiff = useMemo(() => {
+        // Don't compute if not enabled
+        if (!isEnabled) return null;
         if (isBinary) return null;
 
         if (type === 'added') {
@@ -151,13 +156,13 @@ export function useFileDiff(
         }
 
         return null;
-    }, [type, oldContent, newContent, isBinary]);
+    }, [type, oldContent, newContent, isBinary, isEnabled]);
 
     // Compute statistics
     const stats = useMemo(() => {
-        if (!lineDiff) return null;
+        if (!isEnabled || !lineDiff) return null;
         return computeLineStats(lineDiff);
-    }, [lineDiff]);
+    }, [lineDiff, isEnabled]);
 
     return {
         lineDiff,

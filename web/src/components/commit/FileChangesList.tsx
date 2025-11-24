@@ -94,8 +94,14 @@ function FileChangeCard({ change, isExpanded, onToggle, currentQuiltId, parentQu
     const newSize = change.newMeta?.size || 0;
     const sizeDiff = newSize - oldSize;
 
-    // Fetch file diff when expanded
-    const { lineDiff, stats, isBinary, isLoading, error } = useFileDiff(change, currentQuiltId, parentQuiltId, policyId);
+    // Fetch file diff ONLY when expanded to avoid unnecessary decryption prompts
+    const { lineDiff, stats, isBinary, isLoading, error } = useFileDiff(
+        change,
+        currentQuiltId,
+        parentQuiltId,
+        policyId,
+        isExpanded  // Pass expanded state to control when to fetch/decrypt
+    );
 
     const ChevronIcon = isExpanded ? ChevronDown : ChevronRight;
 
