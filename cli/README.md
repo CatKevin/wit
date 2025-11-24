@@ -7,9 +7,9 @@ Wit with Withub: A private, decentralized alternative to Git with GitHub, powere
 - Access to a Walrus relay (testnet by default); Sui RPC endpoints are configurable as the state layer evolves.
 
 ## Install & Run
-- Global install: `npm install -g @wit/cli` then `wit --help`.
-- On-demand: `npx @wit/cli --help` (no global install needed).
-- Upgrade: `npm install -g @wit/cli@latest`. Uninstall: `npm uninstall -g @wit/cli`.
+- Global install: `npm install -g withub-cli` then `wit --help`.
+- On-demand: `npx withub-cli --help` (no global install needed).
+- Upgrade: `npm install -g withub-cli@latest`. Uninstall: `npm uninstall -g withub-cli`.
 
 ## Quickstart
 - Initialize a repo scaffold in the current directory:
@@ -33,7 +33,7 @@ Wit with Withub: A private, decentralized alternative to Git with GitHub, powere
 2) `npm run test:smoke`.
 3) `npm pack` and inspect the tarball (should contain `dist/**`, `README.md`, `LICENSE`, `package.json`; `bin` points to `dist/index.js`).
 4) `npm publish` (scope is already `access: public`; for prerelease use `npm publish --tag next`).
-5) Verify: `npm info @wit/cli version`, `npx @wit/cli --version`, optionally `npm install -g @wit/cli && wit --help` for global smoke.
+5) Verify: `npm info withub-cli version`, `npx withub-cli --version`, optionally `npm install -g withub-cli && wit --help` for global smoke.
 
 ## Current Scope
 - Local VC core: `init`, `status`, `add`, `reset`, `restore`, `commit`, `log`, `diff`, `checkout`.

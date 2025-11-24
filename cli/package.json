@@ -1,5 +1,5 @@
 {
-  "name": "@wit/cli",
+  "name": "withub-cli",
   "version": "0.1.0",
   "description": "wit CLI (Commander + Ink) skeleton",
   "repository": {
