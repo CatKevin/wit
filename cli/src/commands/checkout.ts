@@ -159,6 +159,8 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolic
       throw new Error('Encrypted files detected but no seal policy id provided.');
     }
     seal = await ensureSealSecret(policy, {repoRoot: process.cwd(), createIfMissing: false});
+    // eslint-disable-next-line no-console
+    console.log(colors.cyan(`Seal detected: decrypting files with policy ${policy}.`));
   }
   for (const {rel, meta} of missing) {
     const data = await fetchFileBytes(walrusSvc, manifest, rel, meta, seal);
