@@ -65,17 +65,33 @@ export async function createRepository(
       tx.pure.bool(params.isPrivate),
     ],
   });
-  const res = await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
-  const created = (res as any)?.effects?.created || [];
-  // Find the shared object (Repository)
-  const shared = created.find((c: any) => c?.owner?.Shared !== undefined) || created[0];
-  const objectId =
-    shared?.reference?.objectId ||
-    shared?.reference?.object_id;
-  if (!objectId) {
-    throw new Error('create_repo did not return a repository object id');
+  const res = await client.signAndExecuteTransaction({
+    signer,
+    transaction: tx,
+    options: { showEffects: true, showObjectChanges: true }
+  });
+
+  const changes = res.objectChanges || [];
+  const repoType = `${pkg}::${mod}::Repository`;
+
+  // Find the created Repository object with the correct type
+  const repoObj = changes.find(
+    (c) => c.type === 'created' && c.objectType === repoType
+  );
+
+  if (!repoObj || !('objectId' in repoObj)) {
+    // Fallback logic for older versions
+    const created = (res as any)?.effects?.created || [];
+    // Try to find the Repository by looking for the second shared object if private
+    const sharedObjects = created.filter((c: any) => c?.owner?.Shared !== undefined);
+    const fallbackId = sharedObjects[sharedObjects.length - 1]?.reference?.objectId ||
+                       sharedObjects[sharedObjects.length - 1]?.reference?.object_id;
+    if (fallbackId) return fallbackId;
+
+    throw new Error(`create_repo did not return a repository object of type ${repoType}`);
   }
-  return objectId;
+
+  return repoObj.objectId;
 }
 
 export async function updateRepositoryHead(
