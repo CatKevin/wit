@@ -49,7 +49,12 @@ export async function pullAction(): Promise<void> {
   // Fast-forward by checking out remote head
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`Fast-forwarding to ${remoteHead} ...`));
-  await checkoutAction(remoteHead);
+  const ok = await checkoutAction(remoteHead);
+  if (!ok) {
+    // eslint-disable-next-line no-console
+    console.log(colors.red('Pull aborted (checkout failed).'));
+    return;
+  }
   // eslint-disable-next-line no-console
   console.log(colors.green('Pull complete.'));
 }

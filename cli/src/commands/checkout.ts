@@ -20,11 +20,17 @@ import {decryptWithSeal, ensureSealSecret, type SealKey} from '../lib/seal';
 
 const WIT_DIR = '.wit';
 
-export async function checkoutAction(commitId: string): Promise<void> {
+export async function checkoutAction(commitId: string): Promise<boolean> {
   const witPath = await requireWitDir();
   const repoCfg = await readRepoConfig(witPath);
   const commit = await readCommitById(witPath, commitId);
   const files = await resolveFilesForCommit(witPath, commit, repoCfg.seal_policy_id || null);
+  if (!files) {
+    // Friendly message already printed inside resolveFilesForCommit/ensureBlobsFromManifest
+    // eslint-disable-next-line no-console
+    console.log(colors.red('Checkout aborted due to failed file materialization.'));
+    return false;
+  }
 
   const headRefPath = await readHeadRefPath(witPath);
   const indexPath = path.join(witPath, 'index');
@@ -65,6 +71,7 @@ export async function checkoutAction(commitId: string): Promise<void> {
 
   // eslint-disable-next-line no-console
   console.log(`Checked out ${commitId}`);
+  return true;
 }
 
 async function requireWitDir(): Promise<string> {
@@ -85,7 +92,7 @@ function safeJoin(base: string, rel: string): string {
   return path.join(base, norm);
 }
 
-async function resolveFilesForCommit(witPath: string, commit: any, sealPolicyId: string | null): Promise<Index> {
+async function resolveFilesForCommit(witPath: string, commit: any, sealPolicyId: string | null): Promise<Index | null> {
   if (commit.tree?.files && Object.keys(commit.tree.files).length) {
     return commit.tree.files as Index;
   }
@@ -107,7 +114,7 @@ async function resolveFilesForCommit(witPath: string, commit: any, sealPolicyId:
   }
   const ok = await ensureBlobsFromManifest(witPath, manifest, sealPolicyId);
   if (!ok) {
-    throw new Error('Failed to materialize files (likely seal decryption error).');
+    return null;
   }
   return manifest.files as Index;
 }

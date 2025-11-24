@@ -77,7 +77,9 @@ export function registerCommands(program: Command): void {
   program
     .command('checkout <commit_id>')
     .description('Checkout a commit snapshot to the worktree (updates index and HEAD ref)')
-    .action(checkoutAction);
+    .action(async (commitId: string) => {
+      await checkoutAction(commitId);
+    });
 
   program
     .command('push')
