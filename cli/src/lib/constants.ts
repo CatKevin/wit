@@ -1,4 +1,4 @@
-export const WIT_PACKAGE_ID = '0x48b1216ac1bf2d0926f10712694b0a0ed50072319a84f789f924a31d5af7ac7b';
+export const WIT_PACKAGE_ID = '0x8c91d82b2292ac53a4fa5b21de86b1073230ac1d17dd6ae336ab5b559c329e09';
 
 export const WIT_MODULE_NAME = 'repository';
 
