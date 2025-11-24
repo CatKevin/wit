@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { getFileContent } from '@/lib/walrus';
+import { getFileContent, getBlobArrayBuffer, getFileFromQuiltArrayBuffer } from '@/lib/walrus';
 import { computeLineDiff, computeLineStats, isBinaryFile } from '@/lib/diff';
+import { decryptToText } from '@/lib/seal';
+import { useCurrentAccount, useSignTransaction, useSignPersonalMessage, useSuiClient } from '@mysten/dapp-kit';
 import type { FileChange, LineDiff } from '@/lib/types';
 
 export interface FileDiffResult {
@@ -25,31 +27,56 @@ export interface FileDiffResult {
 export function useFileDiff(
     change: FileChange,
     currentQuiltId?: string,
-    parentQuiltId?: string
+    parentQuiltId?: string,
+    _policyId?: string // Kept for API compatibility, but not needed as enc contains policy_id
 ): FileDiffResult {
     const { path, type, oldMeta, newMeta } = change;
+    const suiClient = useSuiClient();
+    const { mutateAsync: signTransaction } = useSignTransaction();
+    const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+    const account = useCurrentAccount();
 
     // Check if binary file
     const isBinary = isBinaryFile(path);
 
     // Download old file content (for modified/deleted files)
     const { data: oldContent, isLoading: oldLoading, error: oldError } = useQuery<string>({
-        queryKey: ['file-content', oldMeta?.id || oldMeta?.blob_ref || `${parentQuiltId}:${path}`, 'old'],
+        queryKey: ['file-content', oldMeta?.id || oldMeta?.blob_ref || `${parentQuiltId}:${path}`, 'old', oldMeta?.enc?.iv],
         queryFn: async () => {
             if (!oldMeta) return '';
 
-            // If parentQuiltId exists, use quilt API with parent's quilt
-            // The 'id' field in manifest is a quilt-internal reference, not a blob ID
+            // Check if file is encrypted
+            if (oldMeta.enc) {
+                if (!account) throw new Error('Wallet not connected. Please connect your wallet to view encrypted files.');
+
+                let buf: ArrayBuffer;
+                if (parentQuiltId) {
+                    buf = await getFileFromQuiltArrayBuffer(parentQuiltId, path);
+                } else if (oldMeta.blob_ref) {
+                    buf = await getBlobArrayBuffer(oldMeta.blob_ref);
+                } else if (oldMeta.id) {
+                    buf = await getBlobArrayBuffer(oldMeta.id);
+                } else {
+                    throw new Error('No valid file reference found for old content');
+                }
+
+                return await decryptToText(
+                    buf,
+                    oldMeta.enc as any,
+                    account,
+                    (input) => signTransaction({ transaction: input.transaction as any }),
+                    suiClient as any,
+                    (input) => signPersonalMessage({ message: input.message, account } as any)
+                );
+            }
+
+            // Non-encrypted file - use original logic
             if (parentQuiltId) {
                 return await getFileContent({ quiltId: parentQuiltId, identifier: path });
             }
-
-            // Otherwise, try blob_ref for standalone large files
             if (oldMeta.blob_ref) {
                 return await getFileContent({ blobId: oldMeta.blob_ref });
             }
-
-            // Fallback: try using id as blob ID (for very old format)
             if (oldMeta.id) {
                 return await getFileContent({ blobId: oldMeta.id });
             }
@@ -62,22 +89,42 @@ export function useFileDiff(
 
     // Download new file content (for modified/added files)
     const { data: newContent, isLoading: newLoading, error: newError } = useQuery<string>({
-        queryKey: ['file-content', newMeta?.id || newMeta?.blob_ref || `${currentQuiltId}:${path}`, 'new'],
+        queryKey: ['file-content', newMeta?.id || newMeta?.blob_ref || `${currentQuiltId}:${path}`, 'new', newMeta?.enc?.iv],
         queryFn: async () => {
             if (!newMeta) return '';
 
-            // If currentQuiltId exists, use quilt API with current commit's quilt
-            // The 'id' field in manifest is a quilt-internal reference, not a blob ID
+            // Check if file is encrypted
+            if (newMeta.enc) {
+                if (!account) throw new Error('Wallet not connected. Please connect your wallet to view encrypted files.');
+
+                let buf: ArrayBuffer;
+                if (currentQuiltId) {
+                    buf = await getFileFromQuiltArrayBuffer(currentQuiltId, path);
+                } else if (newMeta.blob_ref) {
+                    buf = await getBlobArrayBuffer(newMeta.blob_ref);
+                } else if (newMeta.id) {
+                    buf = await getBlobArrayBuffer(newMeta.id);
+                } else {
+                    throw new Error('No valid file reference found for new content');
+                }
+
+                return await decryptToText(
+                    buf,
+                    newMeta.enc as any,
+                    account,
+                    (input) => signTransaction({ transaction: input.transaction as any }),
+                    suiClient as any,
+                    (input) => signPersonalMessage({ message: input.message, account } as any)
+                );
+            }
+
+            // Non-encrypted file - use original logic
             if (currentQuiltId) {
                 return await getFileContent({ quiltId: currentQuiltId, identifier: path });
             }
-
-            // Otherwise, try blob_ref for standalone large files
             if (newMeta.blob_ref) {
                 return await getFileContent({ blobId: newMeta.blob_ref });
             }
-
-            // Fallback: try using id as blob ID (for very old format)
             if (newMeta.id) {
                 return await getFileContent({ blobId: newMeta.id });
             }

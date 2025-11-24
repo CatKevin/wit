@@ -9,9 +9,10 @@ interface FileChangesListProps {
     changes: CommitDiffChanges;
     currentQuiltId?: string; // Current commit's quilt ID for new file downloads
     parentQuiltId?: string; // Parent commit's quilt ID for old file downloads
+    policyId?: string; // Policy ID for decrypting encrypted files
 }
 
-export function FileChangesList({ changes, currentQuiltId, parentQuiltId }: FileChangesListProps) {
+export function FileChangesList({ changes, currentQuiltId, parentQuiltId, policyId }: FileChangesListProps) {
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
     const allChanges = [
@@ -56,6 +57,7 @@ export function FileChangesList({ changes, currentQuiltId, parentQuiltId }: File
                         onToggle={() => toggleFileExpansion(change.path)}
                         currentQuiltId={currentQuiltId}
                         parentQuiltId={parentQuiltId}
+                        policyId={policyId}
                     />
                 );
             })}
@@ -69,9 +71,10 @@ interface FileChangeCardProps {
     onToggle: () => void;
     currentQuiltId?: string;
     parentQuiltId?: string;
+    policyId?: string;
 }
 
-function FileChangeCard({ change, isExpanded, onToggle, currentQuiltId, parentQuiltId }: FileChangeCardProps) {
+function FileChangeCard({ change, isExpanded, onToggle, currentQuiltId, parentQuiltId, policyId }: FileChangeCardProps) {
     const Icon =
         change.type === 'added' ? FilePlus :
         change.type === 'modified' ? FileEdit :
@@ -92,7 +95,7 @@ function FileChangeCard({ change, isExpanded, onToggle, currentQuiltId, parentQu
     const sizeDiff = newSize - oldSize;
 
     // Fetch file diff when expanded
-    const { lineDiff, stats, isBinary, isLoading, error } = useFileDiff(change, currentQuiltId, parentQuiltId);
+    const { lineDiff, stats, isBinary, isLoading, error } = useFileDiff(change, currentQuiltId, parentQuiltId, policyId);
 
     const ChevronIcon = isExpanded ? ChevronDown : ChevronRight;
 

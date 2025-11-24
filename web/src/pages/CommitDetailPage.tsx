@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ArrowLeft, GitCommit, User, Calendar, Loader2, AlertCircle } from 'lucide-react';
 import { useCommitDiff } from '@/hooks/useCommitDiff';
+import { useRepository } from '@/hooks/useRepository';
 import { FileChangesList } from '@/components/commit/FileChangesList';
 import { CommitStats } from '@/components/commit/CommitStats';
 import { Card } from '@/components/ui/card';
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button';
 export default function CommitDetailPage() {
     const { repoId, commitId } = useParams<{ repoId: string; commitId: string }>();
     const { diff, isLoading, error } = useCommitDiff(commitId);
+    const { data: repo } = useRepository(repoId!);
 
     if (isLoading) {
         return (
@@ -150,6 +152,7 @@ export default function CommitDetailPage() {
                     changes={changes}
                     currentQuiltId={commit.commit.tree.quilt_id || undefined}
                     parentQuiltId={parentCommit?.commit?.tree?.quilt_id || undefined}
+                    policyId={repo?.seal_policy_id}
                 />
             </div>
         </div>

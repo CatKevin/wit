@@ -7,6 +7,14 @@ export interface CommitFile {
     mtime: number;
     id?: string;        // Walrus file blob ID (for manifest files)
     blob_ref?: string;  // Legacy/alternative blob reference
+    enc?: {             // Encryption metadata for encrypted files
+        alg: string;
+        iv: string;
+        tag: string;
+        policy_id: string;
+        package_id: string;
+        sealed_session_key: string;
+    };
 }
 
 export interface CommitTree {
