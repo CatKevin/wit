@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { ConnectButton } from '@mysten/dapp-kit';
 import { NetworkSelector } from '@/components/layout/NetworkSelector';
 import Home from '@/pages/Home';
