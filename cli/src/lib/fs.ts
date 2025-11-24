@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import ignore, {Ignore} from 'ignore';
+import ignore, { Ignore } from 'ignore';
 
 export type FileMeta = {
   hash: string;
@@ -9,10 +9,13 @@ export type FileMeta = {
   mode: string;
   mtime: number;
   enc?: {
-    alg: 'aes-256-gcm';
+    alg: 'aes-256-gcm' | 'seal-aes-256-gcm';
     iv: string;
     tag: string;
     policy?: string;
+    policy_id?: string;
+    package_id?: string;
+    sealed_session_key?: string;
     cipher_size?: number;
   };
 };
@@ -32,7 +35,7 @@ export function modeToString(mode: number): string {
   return `100${isExec ? '755' : '644'}`;
 }
 
-export function mtimeSec(stat: {mtimeMs: number}): number {
+export function mtimeSec(stat: { mtimeMs: number }): number {
   return Math.floor(stat.mtimeMs / 1000);
 }
 
@@ -75,7 +78,7 @@ export async function ensureBlobFromFile(witPath: string, hash: string, filePath
   } catch (err: any) {
     if (err?.code !== 'ENOENT') throw err;
   }
-  await fs.mkdir(path.dirname(blobPath), {recursive: true});
+  await fs.mkdir(path.dirname(blobPath), { recursive: true });
   const data = await fs.readFile(filePath);
   await fs.writeFile(blobPath, data);
 }
@@ -91,7 +94,7 @@ export async function readBlob(witPath: string, hash: string): Promise<Buffer | 
 }
 
 export async function ensureDirForFile(filePath: string): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), {recursive: true});
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
 
 export async function removeFileIfExists(filePath: string): Promise<void> {
@@ -133,7 +136,7 @@ export async function walkFiles(
   const trackedList = tracked ? Array.from(tracked) : null;
 
   async function walkDir(dir: string): Promise<string[]> {
-    const entries = await fs.readdir(dir, {withFileTypes: true});
+    const entries = await fs.readdir(dir, { withFileTypes: true });
     const files: string[] = [];
     const dirTasks: Promise<string[]>[] = [];
 

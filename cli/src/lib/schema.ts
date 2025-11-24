@@ -1,4 +1,4 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
 const fileMeta = z.object({
   hash: z.string().min(1),
@@ -8,10 +8,13 @@ const fileMeta = z.object({
   id: z.string().min(1).optional(),
   enc: z
     .object({
-      alg: z.literal('aes-256-gcm'),
+      alg: z.union([z.literal('aes-256-gcm'), z.literal('seal-aes-256-gcm')]),
       iv: z.string().min(1),
       tag: z.string().min(1),
       policy: z.string().min(1).optional(),
+      policy_id: z.string().min(1).optional(),
+      package_id: z.string().min(1).optional(),
+      sealed_session_key: z.string().min(1).optional(),
       cipher_size: z.number().int().nonnegative().optional(),
     })
     .optional(),

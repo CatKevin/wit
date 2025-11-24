@@ -1,5 +1,13 @@
-import {Command} from 'commander';
-import {registerCommands} from './commands/registerCommands';
+import { Command } from 'commander';
+import { registerCommands } from './commands/registerCommands';
+
+// Polyfill for toReversed (Node < 20)
+if (!Array.prototype.toReversed) {
+  // eslint-disable-next-line no-extend-native
+  Array.prototype.toReversed = function <T>(this: T[]): T[] {
+    return [...this].reverse();
+  };
+}
 
 const VERSION = '0.1.0-dev';
 

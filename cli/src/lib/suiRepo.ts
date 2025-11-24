@@ -110,6 +110,30 @@ export async function updateRepositoryHead(
   await client.signAndExecuteTransaction({ signer, transaction: tx, options: { showEffects: true } });
 }
 
+export function decodeVecAsHex(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === 'string') {
+    return raw.startsWith('0x') ? raw : `0x${raw}`;
+  }
+  if (Array.isArray(raw)) {
+    if (!raw.length) return null;
+    if (raw.every((v) => typeof v === 'number')) {
+      return `0x${Buffer.from(raw as number[]).toString('hex')}`;
+    }
+    if (raw.length === 1) {
+      return decodeVecAsHex(raw[0]);
+    }
+    // Should not happen for vector<u8>
+    return null;
+  }
+  if (typeof raw === 'object') {
+    const asRec = raw as Record<string, any>;
+    if (asRec.vec !== undefined) return decodeVecAsHex(asRec.vec);
+    if (asRec.fields !== undefined) return decodeVecAsHex(asRec.fields);
+  }
+  return null;
+}
+
 export async function fetchRepositoryState(client: SuiClient, repoId: string): Promise<OnchainRepoState> {
   const resp = await client.getObject({ id: repoId, options: { showContent: true } });
   const data: any = resp?.data;
@@ -124,7 +148,7 @@ export async function fetchRepositoryState(client: SuiClient, repoId: string): P
     headManifest: decodeVecAsString(fields.head_manifest),
     headQuilt: decodeVecAsString(fields.head_quilt),
     version: Number(fields.version || 0),
-    sealPolicyId: decodeVecAsString(fields.seal_policy_id),
+    sealPolicyId: decodeVecAsHex(fields.seal_policy_id),
   };
 }
 
