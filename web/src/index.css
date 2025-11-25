@@ -1,3 +1,351 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 禁用过度滚动效果 */
+html, body {
+    overscroll-behavior: none;
+}
+
+/* Scroll Snap 容器 */
+.scroll-snap-container {
+    scroll-snap-type: y proximity;
+    scroll-behavior: smooth;
+}
+
+/* Scroll Snap 子元素 */
+.scroll-snap-section {
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
+}
+
+/* ===== 自定义动画 ===== */
+@layer utilities {
+    /* 渐变文字动画 */
+    .animate-gradient-text {
+        background-size: 200% auto;
+        animation: gradient-shift 3s linear infinite;
+    }
+
+    @keyframes gradient-shift {
+        0% { background-position: 0% center; }
+        100% { background-position: 200% center; }
+    }
+
+    /* 流光边框 */
+    .animate-border-flow {
+        background-size: 300% 100%;
+        animation: border-flow 3s linear infinite;
+    }
+
+    @keyframes border-flow {
+        0% { background-position: 0% center; }
+        100% { background-position: 300% center; }
+    }
+
+    /* 呼吸发光 */
+    .animate-pulse-glow {
+        animation: pulse-glow 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+        0%, 100% {
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.3),
+                        0 0 40px rgba(6, 182, 212, 0.1);
+        }
+        50% {
+            box-shadow: 0 0 30px rgba(6, 182, 212, 0.5),
+                        0 0 60px rgba(6, 182, 212, 0.2);
+        }
+    }
+
+    /* 涟漪扩散 */
+    .animate-ripple {
+        animation: ripple 1.5s ease-out infinite;
+    }
+
+    @keyframes ripple {
+        0% {
+            transform: scale(1);
+            opacity: 0.5;
+        }
+        100% {
+            transform: scale(2);
+            opacity: 0;
+        }
+    }
+
+    /* 浮动动画 */
+    .animate-float {
+        animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+    }
+
+    /* 慢速弹跳 */
+    .animate-bounce-slow {
+        animation: bounce-slow 3s ease-in-out infinite;
+    }
+
+    @keyframes bounce-slow {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-15px); }
+    }
+
+    /* 旋转发光 */
+    .animate-spin-slow {
+        animation: spin-slow 8s linear infinite;
+    }
+
+    @keyframes spin-slow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    /* 闪烁光标 */
+    .animate-cursor-blink {
+        animation: cursor-blink 1s step-end infinite;
+    }
+
+    @keyframes cursor-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
+
+    /* 打字机效果 */
+    .animate-typewriter {
+        overflow: hidden;
+        border-right: 2px solid;
+        white-space: nowrap;
+        animation: typewriter 3s steps(40) 1s forwards,
+                   blink-caret 0.75s step-end infinite;
+    }
+
+    @keyframes typewriter {
+        from { width: 0; }
+        to { width: 100%; }
+    }
+
+    @keyframes blink-caret {
+        from, to { border-color: transparent; }
+        50% { border-color: currentColor; }
+    }
+}
+
+/* ===== 流光边框卡片 ===== */
+.animated-border-card {
+    position: relative;
+    border-radius: 1rem;
+    padding: 2px;
+    background: linear-gradient(
+        90deg,
+        #06b6d4,
+        #0ea5e9,
+        #3b82f6,
+        #14b8a6,
+        #10b981,
+        #06b6d4
+    );
+    background-size: 400% 100%;
+    animation: border-flow 4s linear infinite;
+}
+
+.animated-border-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 1rem;
+    padding: 2px;
+    background: inherit;
+    background-size: inherit;
+    animation: inherit;
+    filter: blur(10px);
+    opacity: 0.5;
+    z-index: -1;
+}
+
+.animated-border-card-content {
+    background: white;
+    border-radius: calc(1rem - 2px);
+    height: 100%;
+}
+
+/* ===== 发光按钮 ===== */
+.glow-button {
+    position: relative;
+    overflow: hidden;
+}
+
+.glow-button::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(90deg, #06b6d4, #0ea5e9, #3b82f6, #06b6d4);
+    background-size: 200% 100%;
+    animation: border-flow 2s linear infinite;
+    border-radius: inherit;
+    z-index: -1;
+}
+
+.glow-button::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    background: inherit;
+    border-radius: inherit;
+    z-index: -1;
+}
+
+/* ===== 霓虹文字 ===== */
+.neon-text {
+    text-shadow:
+        0 0 5px currentColor,
+        0 0 10px currentColor,
+        0 0 20px currentColor,
+        0 0 40px currentColor;
+}
+
+/* ===== 玻璃拟态 ===== */
+.glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.glass-dark {
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ===== 渐变背景 ===== */
+.bg-gradient-radial {
+    background: radial-gradient(circle at center, var(--tw-gradient-from), var(--tw-gradient-to));
+}
+
+.bg-mesh-gradient {
+    background:
+        radial-gradient(at 40% 20%, hsla(228, 100%, 74%, 0.3) 0px, transparent 50%),
+        radial-gradient(at 80% 0%, hsla(189, 100%, 56%, 0.2) 0px, transparent 50%),
+        radial-gradient(at 0% 50%, hsla(355, 100%, 93%, 0.2) 0px, transparent 50%),
+        radial-gradient(at 80% 50%, hsla(340, 100%, 76%, 0.2) 0px, transparent 50%),
+        radial-gradient(at 0% 100%, hsla(269, 100%, 77%, 0.2) 0px, transparent 50%),
+        radial-gradient(at 80% 100%, hsla(240, 100%, 70%, 0.2) 0px, transparent 50%),
+        radial-gradient(at 0% 0%, hsla(343, 100%, 76%, 0.2) 0px, transparent 50%);
+}
+
+/* ===== 网格背景 ===== */
+.bg-grid {
+    background-image:
+        linear-gradient(to right, rgba(6, 182, 212, 0.1) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(6, 182, 212, 0.1) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+.bg-dot-grid {
+    background-image: radial-gradient(circle, rgba(6, 182, 212, 0.3) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+/* ===== 3D 变换 ===== */
+.perspective-1000 {
+    perspective: 1000px;
+}
+
+.preserve-3d {
+    transform-style: preserve-3d;
+}
+
+/* ===== 滚动条美化 - 自动隐藏 ===== */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+
+html:hover {
+    scrollbar-color: #64748b transparent;
+}
+
+/* Webkit 浏览器 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+    transition: background 0.3s ease;
+}
+
+/* 滚动时显示滚动条 */
+html.is-scrolling ::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.6);
+}
+
+html.is-scrolling ::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.9);
+}
+
+/* ===== 选中文字样式 ===== */
+::selection {
+    background: rgba(6, 182, 212, 0.3);
+    color: inherit;
+}
+
+/* ===== 终端滚动条样式 - 始终可见 ===== */
+.terminal-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #475569 transparent;
+}
+
+.terminal-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-track {
+    background: rgba(51, 65, 85, 0.3);
+    border-radius: 4px;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 4px;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+/* ===== ConnectButton 自定义样式 ===== */
+.connect-button-wrapper button {
+    border-radius: 0.75rem !important;
+    font-weight: 500 !important;
+    font-size: 0.875rem !important;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.2s ease !important;
+    border: 1px solid #e2e8f0 !important;
+    background: white !important;
+    color: #1e293b !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.connect-button-wrapper button:hover {
+    border-color: #06b6d4 !important;
+    background: #f0fdfa !important;
+    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.15) !important;
+}
+
+.connect-button-wrapper button[data-connected="true"] {
+    background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%) !important;
+    border-color: #06b6d4 !important;
+}
