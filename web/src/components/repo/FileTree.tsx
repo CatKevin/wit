@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, File, Folder } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronRight, File, Folder, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Manifest } from '@/lib/walrus';
 
@@ -54,7 +55,6 @@ function buildTree(manifest: Manifest): FileTreeNode[] {
         });
     });
 
-    // Sort: Folders first, then files, alphabetical
     const sortNodes = (nodes: FileTreeNode[]) => {
         nodes.sort((a, b) => {
             if (a.type === b.type) return a.name.localeCompare(b.name);
@@ -75,7 +75,7 @@ function TreeNode({ node, onSelect, selectedPath, level = 0 }: {
     selectedPath?: string;
     level?: number;
 }) {
-    const [isOpen, setIsOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(level === 0);
     const isSelected = node.path === selectedPath;
 
     const handleClick = (e: React.MouseEvent) => {
@@ -89,41 +89,87 @@ function TreeNode({ node, onSelect, selectedPath, level = 0 }: {
 
     return (
         <div>
-            <div
+            <motion.div
                 className={cn(
-                    "flex items-center py-1 px-2 cursor-pointer hover:bg-slate-100 text-sm select-none",
-                    isSelected && "bg-slate-200 text-slate-900 font-medium"
+                    "flex items-center py-1.5 px-2 cursor-pointer select-none rounded-md mx-1 my-0.5 transition-all",
+                    isSelected
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 )}
                 style={{ paddingLeft: `${level * 12 + 8}px` }}
                 onClick={handleClick}
+                whileHover={{ x: 2 }}
+                whileTap={{ scale: 0.98 }}
             >
-                <span className="mr-1 opacity-70">
+                {/* Chevron */}
+                <span className="mr-1 opacity-50 flex-shrink-0">
                     {node.type === 'folder' ? (
-                        isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+                        <motion.div
+                            initial={false}
+                            animate={{ rotate: isOpen ? 90 : 0 }}
+                            transition={{ duration: 0.15 }}
+                        >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                        </motion.div>
                     ) : (
-                        <span className="w-4 inline-block" />
+                        <span className="w-3.5 inline-block" />
                     )}
                 </span>
-                <span className="mr-2 text-slate-500">
-                    {node.type === 'folder' ? <Folder className="h-4 w-4" /> : <File className="h-4 w-4" />}
+
+                {/* Icon */}
+                <span className={cn("mr-2 flex-shrink-0", isSelected ? "text-white" : "text-slate-400")}>
+                    {node.type === 'folder' ? (
+                        isOpen ? (
+                            <FolderOpen className="h-4 w-4" />
+                        ) : (
+                            <Folder className="h-4 w-4" />
+                        )
+                    ) : (
+                        <File className="h-4 w-4" />
+                    )}
                 </span>
-                <span className="truncate">{node.name}</span>
-            </div>
-            {isOpen && node.children && (
-                <div>
-                    {node.children.map(child => (
-                        <TreeNode
-                            key={child.path}
-                            node={child}
-                            onSelect={onSelect}
-                            selectedPath={selectedPath}
-                            level={level + 1}
-                        />
-                    ))}
-                </div>
-            )}
+
+                {/* Name */}
+                <span className="truncate text-sm font-mono">{node.name}</span>
+
+                {/* Size indicator for files */}
+                {node.type === 'file' && node.metadata && (
+                    <span className={cn("ml-auto text-xs font-mono", isSelected ? "text-slate-300" : "text-slate-400")}>
+                        {formatSize(node.metadata.size)}
+                    </span>
+                )}
+            </motion.div>
+
+            {/* Children */}
+            <AnimatePresence initial={false}>
+                {isOpen && node.children && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="overflow-hidden"
+                    >
+                        {node.children.map(child => (
+                            <TreeNode
+                                key={child.path}
+                                node={child}
+                                onSelect={onSelect}
+                                selectedPath={selectedPath}
+                                level={level + 1}
+                            />
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
+}
+
+function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}K`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
 }
 
 export function FileTree({ manifest, onSelectFile, selectedPath }: FileTreeProps) {
@@ -136,14 +182,20 @@ export function FileTree({ manifest, onSelectFile, selectedPath }: FileTreeProps
     };
 
     return (
-        <div className="font-mono text-sm">
-            {tree.map(node => (
-                <TreeNode
+        <div className="font-mono text-sm py-2">
+            {tree.map((node, index) => (
+                <motion.div
                     key={node.path}
-                    node={node}
-                    onSelect={handleSelect}
-                    selectedPath={selectedPath}
-                />
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.02 }}
+                >
+                    <TreeNode
+                        node={node}
+                        onSelect={handleSelect}
+                        selectedPath={selectedPath}
+                    />
+                </motion.div>
             ))}
         </div>
     );

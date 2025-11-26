@@ -1,0 +1,12 @@
+{
+  "repo_name": "0xdd3c7f6cf6e374d245afd4e247ffccbe7f33a426ffe2b721904cd55a4a963d34",
+  "repo_id": "0xdd3c7f6cf6e374d245afd4e247ffccbe7f33a426ffe2b721904cd55a4a963d34",
+  "network": "testnet",
+  "relays": [
+    "https://upload-relay.testnet.walrus.space"
+  ],
+  "author": "unknown",
+  "key_alias": "default",
+  "seal_policy_id": null,
+  "created_at": "2025-11-26T05:18:43.059Z"
+}

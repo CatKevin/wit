@@ -1,4 +1,4 @@
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, FileCode } from 'lucide-react';
 import { CodeViewer } from './CodeViewer';
 
 interface FileViewerProps {
@@ -10,9 +10,12 @@ interface FileViewerProps {
 export function FileViewer({ file, loading, error }: FileViewerProps) {
     if (!file && !loading && !error) {
         return (
-            <div className="flex items-center justify-center min-h-[200px] text-slate-400">
+            <div className="flex items-center justify-center min-h-[200px] bg-slate-50 p-8">
                 <div className="text-center">
-                    <p className="text-sm">Select a file to view</p>
+                    <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-slate-100 flex items-center justify-center">
+                        <FileCode className="h-6 w-6 text-slate-400" />
+                    </div>
+                    <p className="text-sm text-slate-500">Select a file to view</p>
                 </div>
             </div>
         );
@@ -20,18 +23,20 @@ export function FileViewer({ file, loading, error }: FileViewerProps) {
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[200px]">
-                <Loader2 className="h-6 w-6 animate-spin text-slate-400 mb-2" />
-                <p className="text-sm text-slate-500">Loading file content...</p>
+            <div className="flex flex-col items-center justify-center min-h-[200px] bg-slate-50 p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-400 mb-3" />
+                <p className="text-sm text-slate-500">Loading...</p>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[200px] text-red-500">
-                <AlertTriangle className="h-6 w-6 mb-2" />
-                <p className="text-sm font-semibold">Failed to load file content</p>
+            <div className="flex flex-col items-center justify-center min-h-[200px] bg-slate-50 p-8">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center">
+                    <AlertTriangle className="h-6 w-6 text-red-500" />
+                </div>
+                <p className="text-sm font-medium text-slate-700">Failed to load file</p>
                 <p className="text-xs text-slate-500 mt-1">{error}</p>
             </div>
         );
@@ -39,11 +44,11 @@ export function FileViewer({ file, loading, error }: FileViewerProps) {
 
     if (!file) {
         return (
-            <div className="flex items-center justify-center min-h-[200px] text-slate-400">
-                <p className="text-sm">No file selected</p>
+            <div className="flex items-center justify-center min-h-[200px] bg-slate-50 p-8">
+                <p className="text-sm text-slate-500">No file selected</p>
             </div>
         );
     }
 
-    return <CodeViewer fileName={file.path} content={file.content} />;
+    return <CodeViewer content={file.content} />;
 }

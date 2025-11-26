@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
 import { NetworkSelector } from '@/components/layout/NetworkSelector';
 import Home from '@/pages/Home';
@@ -7,6 +7,17 @@ import RepoDetail from '@/pages/RepoDetail';
 import CommitDetailPage from '@/pages/CommitDetailPage';
 import logo from '@/assets/logo.png';
 import { Github } from 'lucide-react';
+
+// Protected route component - redirects to home if wallet not connected
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const account = useCurrentAccount();
+
+  if (!account) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function AppContent() {
   const location = useLocation();
@@ -69,8 +80,16 @@ function AppContent() {
       <main className={isLandingPage ? '' : 'p-4 md:p-8'}>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/repo/:id" element={<RepoDetail />} />
-          <Route path="/repo/:repoId/commit/:commitId" element={<CommitDetailPage />} />
+          <Route path="/repo/:id" element={
+            <ProtectedRoute>
+              <RepoDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="/repo/:repoId/commit/:commitId" element={
+            <ProtectedRoute>
+              <CommitDetailPage />
+            </ProtectedRoute>
+          } />
         </Routes>
       </main>
     </div>

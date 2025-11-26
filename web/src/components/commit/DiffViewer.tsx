@@ -1,137 +1,131 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Loader2, AlertCircle } from 'lucide-react';
 import type { LineDiff } from '@/lib/types';
 
 interface DiffViewerProps {
     lineDiff: LineDiff[] | null;
-    fileName: string;
     isLoading?: boolean;
     error?: Error | null;
     isBinary?: boolean;
 }
 
 /**
- * DiffViewer component - displays line-level diff in Unified format
- *
- * Similar to GitHub's diff view:
- * - Green background for added lines (with + prefix)
- * - Red background for removed lines (with - prefix)
- * - White background for context lines
- * - Line numbers on both sides
+ * DiffViewer component - displays line-level diff in light theme
  */
-export function DiffViewer({ lineDiff, fileName, isLoading, error, isBinary }: DiffViewerProps) {
+export function DiffViewer({ lineDiff, isLoading, error, isBinary }: DiffViewerProps) {
 
     if (isLoading) {
         return (
-            <Card>
-                <CardContent className="flex items-center justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-slate-400 mr-2" />
-                    <span className="text-slate-500">Loading diff...</span>
-                </CardContent>
-            </Card>
+            <div className="rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-5 w-5 animate-spin text-slate-400 mr-2" />
+                    <span className="text-slate-500 text-sm">Loading diff...</span>
+                </div>
+            </div>
         );
     }
 
     if (error) {
         return (
-            <Card>
-                <CardContent className="flex items-center justify-center py-12 text-red-500">
-                    <AlertCircle className="h-6 w-6 mr-2" />
+            <div className="rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center justify-center py-12">
+                    <AlertCircle className="h-5 w-5 mr-2 text-red-500" />
                     <div>
-                        <p className="font-semibold">Failed to load diff</p>
-                        <p className="text-xs mt-1">{error.message}</p>
+                        <p className="text-sm text-slate-700">Failed to load diff</p>
+                        <p className="text-xs mt-1 text-slate-500">{error.message}</p>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         );
     }
 
     if (isBinary) {
         return (
-            <Card>
-                <CardHeader className="bg-slate-50 border-b py-2 px-4">
-                    <div className="font-mono text-sm text-slate-700">{fileName}</div>
-                </CardHeader>
-                <CardContent className="py-8 text-center text-slate-500">
-                    <p className="text-sm">Binary file - diff not available</p>
-                </CardContent>
-            </Card>
+            <div className="rounded-xl border border-slate-200 bg-white">
+                <div className="py-8 text-center">
+                    <p className="text-sm text-slate-500">Binary file - diff not available</p>
+                </div>
+            </div>
         );
     }
 
     if (!lineDiff || lineDiff.length === 0) {
         return (
-            <Card>
-                <CardHeader className="bg-slate-50 border-b py-2 px-4">
-                    <div className="font-mono text-sm text-slate-700">{fileName}</div>
-                </CardHeader>
-                <CardContent className="py-8 text-center text-slate-400">
-                    <p className="text-sm">No changes</p>
-                </CardContent>
-            </Card>
+            <div className="rounded-xl border border-slate-200 bg-white">
+                <div className="py-8 text-center">
+                    <p className="text-sm text-slate-500">No changes</p>
+                </div>
+            </div>
         );
     }
 
     return (
-        <Card className="overflow-hidden border border-gray-300 rounded-md">
-            <CardHeader className="bg-gray-50 border-b border-gray-300 py-2 px-3">
-                <div className="font-mono text-xs text-gray-600">{fileName}</div>
-            </CardHeader>
-            <CardContent className="p-0 bg-white">
-                <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                        <tbody>
-                            {lineDiff.map((line, index) => {
-                                // Unified background color for the entire row
-                                const rowBg =
-                                    line.type === 'added'
-                                        ? 'bg-green-50 hover:bg-green-100'
-                                        : line.type === 'removed'
-                                        ? 'bg-red-50 hover:bg-red-100'
-                                        : 'hover:bg-gray-50';
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                <table className="w-full border-collapse">
+                    <tbody>
+                        {lineDiff.map((line, index) => {
+                            const rowBg =
+                                line.type === 'added'
+                                    ? 'bg-green-50'
+                                    : line.type === 'removed'
+                                    ? 'bg-red-50'
+                                    : '';
 
-                                const contentColor =
-                                    line.type === 'added'
-                                        ? 'text-green-800'
-                                        : line.type === 'removed'
-                                        ? 'text-red-800'
-                                        : 'text-gray-700';
+                            const hoverBg =
+                                line.type === 'added'
+                                    ? 'hover:bg-green-100'
+                                    : line.type === 'removed'
+                                    ? 'hover:bg-red-100'
+                                    : 'hover:bg-slate-50';
 
-                                const prefix =
-                                    line.type === 'added'
-                                        ? '+'
-                                        : line.type === 'removed'
-                                        ? '-'
-                                        : ' ';
+                            const contentColor =
+                                line.type === 'added'
+                                    ? 'text-green-700'
+                                    : line.type === 'removed'
+                                    ? 'text-red-700'
+                                    : 'text-slate-600';
 
-                                return (
-                                    <tr key={index} className={`${rowBg} transition-colors`}>
-                                        {/* Line numbers */}
-                                        <td className="select-none text-right align-top font-mono text-gray-500 pl-3 pr-2"
-                                            style={{ fontSize: '12px', width: '45px', minWidth: '45px' }}>
-                                            {line.oldLineNumber || ''}
-                                        </td>
-                                        <td className="select-none text-right align-top font-mono text-gray-500 pr-3 border-r border-gray-300"
-                                            style={{ fontSize: '12px', width: '45px', minWidth: '45px' }}>
-                                            {line.newLineNumber || ''}
-                                        </td>
+                            const lineNumColor =
+                                line.type === 'added'
+                                    ? 'text-green-500'
+                                    : line.type === 'removed'
+                                    ? 'text-red-500'
+                                    : 'text-slate-400';
 
-                                        {/* +/- sign closer to separator */}
-                                        <td className="pl-2 pr-1 text-center font-mono" style={{ fontSize: '12px', width: '20px' }}>
-                                            <span className={`select-none ${contentColor} font-semibold`}>{prefix}</span>
-                                        </td>
+                            const prefix =
+                                line.type === 'added'
+                                    ? '+'
+                                    : line.type === 'removed'
+                                    ? '-'
+                                    : ' ';
 
-                                        {/* Code content separated from +/- sign */}
-                                        <td className="pl-2 pr-4 font-mono" style={{ fontSize: '12px', lineHeight: '20px' }}>
-                                            <span className={contentColor}>{line.content || ' '}</span>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            </CardContent>
-        </Card>
+                            return (
+                                <tr key={index} className={`${rowBg} ${hoverBg} transition-colors`}>
+                                    {/* Line numbers */}
+                                    <td className={`select-none text-right align-top font-mono ${lineNumColor} pl-3 pr-2 border-r border-slate-100`}
+                                        style={{ fontSize: '11px', lineHeight: '20px', width: '40px', minWidth: '40px' }}>
+                                        {line.oldLineNumber || ''}
+                                    </td>
+                                    <td className={`select-none text-right align-top font-mono ${lineNumColor} pr-3 border-r border-slate-200`}
+                                        style={{ fontSize: '11px', lineHeight: '20px', width: '40px', minWidth: '40px' }}>
+                                        {line.newLineNumber || ''}
+                                    </td>
+
+                                    {/* +/- sign */}
+                                    <td className="pl-2 pr-1 text-center font-mono" style={{ fontSize: '12px', width: '16px' }}>
+                                        <span className={`select-none ${contentColor} font-medium`}>{prefix}</span>
+                                    </td>
+
+                                    {/* Code content */}
+                                    <td className="pl-1 pr-4 font-mono" style={{ fontSize: '12px', lineHeight: '20px', whiteSpace: 'pre' }}>
+                                        <span className={contentColor}>{line.content || ' '}</span>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     );
 }

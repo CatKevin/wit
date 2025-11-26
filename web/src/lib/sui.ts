@@ -23,6 +23,7 @@ export interface Repository {
     name: string;
     description: string;
     owner: string;
+    collaborators: string[];
     head_commit?: string;
     head_manifest?: string;
     head_quilt?: string;
@@ -79,6 +80,41 @@ export function decodeVecAsString(raw: unknown): string | null {
     return String(raw);
 }
 
+// Decode vector<u8> as hex string (for object IDs like seal_policy_id)
+export function decodeVecAsHex(raw: unknown): string | null {
+    if (raw === null || raw === undefined) return null;
+
+    if (typeof raw === 'string') {
+        // Already a hex string
+        return raw.startsWith('0x') ? raw : `0x${raw}`;
+    }
+
+    if (Array.isArray(raw)) {
+        if (!raw.length) return null;
+
+        // Array of numbers (byte array) - convert to hex
+        if (raw.every((v) => typeof v === 'number')) {
+            const hex = (raw as number[]).map(b => b.toString(16).padStart(2, '0')).join('');
+            return `0x${hex}`;
+        }
+
+        // Single element array - recurse
+        if (raw.length === 1) {
+            return decodeVecAsHex(raw[0]);
+        }
+
+        return null;
+    }
+
+    if (typeof raw === 'object') {
+        const asRec = raw as Record<string, any>;
+        if (asRec.vec !== undefined) return decodeVecAsHex(asRec.vec);
+        if (asRec.fields !== undefined) return decodeVecAsHex(asRec.fields);
+    }
+
+    return null;
+}
+
 export async function getRepository(id: string, client?: SuiClient): Promise<Repository> {
     const suiClient = client || getSuiClient();
     const object = await suiClient.getObject({
@@ -99,15 +135,22 @@ export async function getRepository(id: string, client?: SuiClient): Promise<Rep
 
     const fields = content.fields;
 
+    // Parse collaborators array
+    let collaborators: string[] = [];
+    if (fields.collaborators && Array.isArray(fields.collaborators)) {
+        collaborators = fields.collaborators.map((addr: string) => addr);
+    }
+
     return {
         id: object.data?.objectId || '',
         name: decodeVecAsString(fields.name) || '',
         description: decodeVecAsString(fields.description) || '',
         owner: fields.owner,
+        collaborators,
         head_commit: decodeVecAsString(fields.head_commit) || undefined,
         head_manifest: decodeVecAsString(fields.head_manifest) || undefined,
         head_quilt: decodeVecAsString(fields.head_quilt) || undefined,
         version: Number(fields.version),
-        seal_policy_id: decodeVecAsString(fields.seal_policy_id) || undefined,
+        seal_policy_id: decodeVecAsHex(fields.seal_policy_id) || undefined,
     };
 }
