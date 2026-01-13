@@ -18,6 +18,7 @@ Wit with Withub: A private, decentralized alternative to Git with GitHub, powere
   ```
   This creates `.wit/`, writes `config.json` with sensible defaults (Walrus testnet relay, author/key placeholders), and ensures `.gitignore` / `.witignore` include `.wit/` and key paths.
 - Local VC workflow: `wit status`, `wit add`, `wit reset` / `wit restore --staged`, `wit restore <paths>`, `wit commit`, `wit log`, `wit diff`, `wit checkout`.
+- Chain selection: `wit chain list`, `wit chain current`, `wit chain use <chain>` (stores active chain in `~/.witconfig`).
 - Storage experiments: `wit push-blob` / `pull-blob`; `wit push-quilt` / `pull-quilt` / `quilt-cat` / `quilt-ls` / `quilt-cat-id`; `push-quilt-legacy` / `pull-quilt-legacy` as archive fallback.
 - Colorized output can be toggled via `--color` / `--no-color` or env vars `NO_COLOR` / `WIT_NO_COLOR`.
 
