@@ -11,7 +11,7 @@ import { fetchAction } from './fetch';
 import { pullAction } from './pull';
 import { inviteAction } from './invite';
 import { colors, colorsEnabled, setColorsEnabled } from '../lib/ui';
-import { accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction } from './account';
+import { accountBalanceAction, accountGenerateAction, accountImportAction, accountListAction, accountUseAction } from './account';
 import { pushBlobAction, pullBlobAction } from './walrusBlob';
 import {
   pushQuiltAction,
@@ -244,6 +244,11 @@ export function registerCommands(program: Command): void {
     .option('--alias <name>', 'alias to record in key file (defaults to "default")')
     .description('Generate a new account (keypair), set as active, and update author if unknown')
     .action(accountGenerateAction);
+  account
+    .command('import <private_key>')
+    .option('--alias <name>', 'alias to record in key file (defaults to "default")')
+    .description('Import a private key for the active chain and set as active')
+    .action((privateKey: string, opts: { alias?: string }) => accountImportAction(privateKey, opts));
   account
     .command('balance')
     .argument('[address]', 'Address to query (defaults to active)')

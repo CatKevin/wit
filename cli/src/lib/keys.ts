@@ -13,10 +13,14 @@ type GlobalConfig = {
   network?: string;
   relays?: string[];
   active_address?: string;
+  active_addresses?: Record<string, string>;
+  key_aliases?: Record<string, string>;
+  authors?: Record<string, string>;
 };
 
 type StoredKey = {
   scheme: 'ED25519';
+  chain?: 'sui';
   privateKey: string; // bech32 suiprivkey
   address: string;
   publicKey: string; // base64
@@ -41,7 +45,8 @@ export type ResourceCheck = {
   walError?: string;
 };
 
-export const KEY_HOME = process.env.WIT_KEY_HOME || path.join(os.homedir(), '.wit', 'keys');
+export const KEY_HOME = process.env.WIT_KEY_HOME || path.join(os.homedir(), '.wit', 'keys-sui');
+const LEGACY_KEY_HOME = path.join(os.homedir(), '.wit', 'keys');
 const GLOBAL_CONFIG = path.join(os.homedir(), '.witconfig');
 const SUI_COIN = '0x2::sui::SUI';
 // WAL CoinType map (9 decimals). Default to testnet when unknown.
@@ -56,6 +61,25 @@ export function keyPathFor(address: string): string {
   return path.join(KEY_HOME, `${normalizeAddress(address)}.key`);
 }
 
+function keyHomes(): string[] {
+  if (process.env.WIT_KEY_HOME) return [KEY_HOME];
+  return [KEY_HOME, LEGACY_KEY_HOME];
+}
+
+async function findKeyFile(address: string): Promise<string | null> {
+  const filename = `${normalizeAddress(address)}.key`;
+  for (const dir of keyHomes()) {
+    const file = path.join(dir, filename);
+    try {
+      await fs.access(file);
+      return file;
+    } catch (err: any) {
+      if (err?.code !== 'ENOENT') throw err;
+    }
+  }
+  return null;
+}
+
 export async function createSigner(alias = 'default'): Promise<LoadedSigner> {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
@@ -64,6 +88,7 @@ export async function createSigner(alias = 'default'): Promise<LoadedSigner> {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const payload: StoredKey = {
     scheme: 'ED25519',
+    chain: 'sui',
     privateKey: keypair.getSecretKey(),
     address,
     publicKey: Buffer.from(keypair.getPublicKey().toRawBytes()).toString('base64'),
@@ -72,12 +97,23 @@ export async function createSigner(alias = 'default'): Promise<LoadedSigner> {
   };
   await fs.writeFile(file, JSON.stringify(payload, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
 
-  await upsertGlobalConfig((cfg) => ({
-    ...cfg,
-    active_address: address,
-    key_alias: alias || cfg.key_alias || 'default',
-    author: cfg.author && cfg.author !== 'unknown' ? cfg.author : address,
-  }));
+  await upsertGlobalConfig((cfg) => {
+    const next: GlobalConfig = { ...cfg };
+    next.active_address = address;
+    next.key_alias = alias || cfg.key_alias || 'default';
+    if (!next.active_addresses) next.active_addresses = {};
+    next.active_addresses.sui = address;
+    if (!next.key_aliases) next.key_aliases = {};
+    next.key_aliases.sui = alias || cfg.key_alias || 'default';
+    if (!next.authors) next.authors = {};
+    if (!next.authors.sui || next.authors.sui === 'unknown') {
+      next.authors.sui = address;
+    }
+    if (!cfg.author || cfg.author === 'unknown') {
+      next.author = address;
+    }
+    return next;
+  });
 
   return { signer: keypair, address, file };
 }
@@ -88,7 +124,10 @@ export async function loadSigner(address?: string): Promise<LoadedSigner> {
   if (!resolvedAddress) {
     throw new Error('No active address configured. Generate a key with createSigner() or set active_address in ~/.witconfig.');
   }
-  const file = keyPathFor(resolvedAddress);
+  const file = await findKeyFile(resolvedAddress);
+  if (!file) {
+    throw new Error(`Key file not found for address ${resolvedAddress}. Generate a key with createSigner().`);
+  }
   const stored = await readKeyFile(file);
   const signer = Ed25519Keypair.fromSecretKey(stored.privateKey) as Keypair;
   const derived = signer.getPublicKey().toSuiAddress();
@@ -205,48 +244,68 @@ export type KeyInfo = {
 };
 
 export async function listStoredKeys(): Promise<KeyInfo[]> {
-  let entries: Dirent[];
-  try {
-    entries = await fs.readdir(KEY_HOME, { withFileTypes: true });
-  } catch (err: any) {
-    if (err?.code === 'ENOENT') return [];
-    throw err;
-  }
-
-  const keys: KeyInfo[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.key')) continue;
-    const file = path.join(KEY_HOME, entry.name);
+  const keysByAddress = new Map<string, KeyInfo>();
+  for (const dir of keyHomes()) {
+    let entries: Dirent[];
     try {
-      const parsed = await readKeyFile(file);
-      const derived = parsed.address || Ed25519Keypair.fromSecretKey(parsed.privateKey).getPublicKey().toSuiAddress();
-      keys.push({
-        address: normalizeAddress(derived),
-        alias: parsed.alias,
-        file,
-        createdAt: parsed.createdAt,
-      });
+      entries = await fs.readdir(dir, { withFileTypes: true });
     } catch (err: any) {
-      // eslint-disable-next-line no-console
-      console.warn(`Skipping key ${file}: ${err.message}`);
+      if (err?.code === 'ENOENT') continue;
+      throw err;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.key')) continue;
+      const file = path.join(dir, entry.name);
+      try {
+        const parsed = await readKeyFile(file);
+        if (parsed.chain && parsed.chain !== 'sui') continue;
+        const derived = parsed.address || Ed25519Keypair.fromSecretKey(parsed.privateKey).getPublicKey().toSuiAddress();
+        const address = normalizeAddress(derived);
+        if (keysByAddress.has(address)) continue;
+        keysByAddress.set(address, {
+          address,
+          alias: parsed.alias,
+          file,
+          createdAt: parsed.createdAt,
+        });
+      } catch (err: any) {
+        // eslint-disable-next-line no-console
+        console.warn(`Skipping key ${file}: ${err.message}`);
+      }
     }
   }
-  return keys.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  return Array.from(keysByAddress.values()).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 }
 
 export async function readActiveAddress(): Promise<string | null> {
   const cfg = await readGlobalConfig();
+  const byChain = cfg.active_addresses?.sui;
+  if (byChain) return normalizeAddress(byChain);
   if (cfg.active_address) return normalizeAddress(cfg.active_address);
-  const guessed = guessAddress(cfg.author);
+  const guessed = guessAddress(cfg.authors?.sui || cfg.author);
   return guessed ? normalizeAddress(guessed) : null;
 }
 
 export async function setActiveAddress(address: string, opts?: { alias?: string; updateAuthorIfUnknown?: boolean }): Promise<void> {
   await upsertGlobalConfig((cfg) => {
-    const next = { ...cfg, active_address: normalizeAddress(address) };
+    const normalized = normalizeAddress(address);
+    const next: GlobalConfig = { ...cfg, active_address: normalized };
     if (opts?.alias) next.key_alias = opts.alias;
-    if (opts?.updateAuthorIfUnknown && (!cfg.author || cfg.author === 'unknown')) {
-      next.author = normalizeAddress(address);
+    if (!next.active_addresses) next.active_addresses = {};
+    next.active_addresses.sui = normalized;
+    if (opts?.alias) {
+      if (!next.key_aliases) next.key_aliases = {};
+      next.key_aliases.sui = opts.alias;
+    }
+    if (opts?.updateAuthorIfUnknown) {
+      if (!next.authors) next.authors = {};
+      if (!next.authors.sui || next.authors.sui === 'unknown') {
+        next.authors.sui = normalized;
+      }
+      if (!cfg.author || cfg.author === 'unknown') {
+        next.author = normalized;
+      }
     }
     return next;
   });

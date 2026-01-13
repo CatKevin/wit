@@ -28,6 +28,7 @@
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
     "diff": "^5.2.0",
+    "ethers": "6.16.0",
     "ignore": "^5.3.1",
     "ink": "^4.4.1",
     "isbinaryfile": "^5.0.2",

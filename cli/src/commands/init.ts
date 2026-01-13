@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { readActiveAddress } from '../lib/keys';
 import { readActiveChain } from '../lib/chain';
+import { readActiveEvmAddress } from '../lib/evmKeys';
 import type { ChainConfig, RepoConfig } from '../lib/repo';
 
 type GlobalConfig = {
@@ -13,7 +14,7 @@ type GlobalConfig = {
 
 const DEFAULT_RELAYS = ['https://upload-relay.testnet.walrus.space'];
 const DEFAULT_NETWORK = 'testnet';
-const IGNORE_ENTRIES = ['.wit/', '~/.wit/keys', '.env.local', '*.pem', '.wit/seal'];
+const IGNORE_ENTRIES = ['.wit/', '~/.wit/keys', '~/.wit/keys-sui', '~/.wit/keys-evm', '.env.local', '*.pem', '.wit/seal'];
 
 type InitOptions = {
   private?: boolean;
@@ -29,8 +30,8 @@ export async function initAction(name?: string, options?: InitOptions): Promise<
   await ensureLayout(witDir);
 
   const globalCfg = await readGlobalConfig();
-  const activeAddress = await readActiveAddress();
   const activeChain = await readActiveChain();
+  const activeAddress = activeChain === 'mantle' ? await readActiveEvmAddress() : await readActiveAddress();
   const repoCfg = buildRepoConfig(repoName, globalCfg, activeAddress, activeChain);
 
   const wantsPrivate = options?.private || Boolean(options?.sealPolicy || options?.sealSecret);
@@ -127,7 +128,7 @@ function buildChainConfig(
     };
   }
   return {
-    author: 'unknown',
+    author: activeAddress || 'unknown',
     storage_backend: 'ipfs',
   };
 }
