@@ -3,6 +3,7 @@ import path from 'path';
 import { readActiveAddress } from '../lib/keys';
 import { readActiveChain } from '../lib/chain';
 import { readActiveEvmAddress } from '../lib/evmKeys';
+import { colors } from '../lib/ui';
 import type { ChainConfig, RepoConfig } from '../lib/repo';
 
 type GlobalConfig = {
@@ -37,7 +38,10 @@ export async function initAction(name?: string, options?: InitOptions): Promise<
   } else if (activeChain === 'sui') {
     activeAddress = await readActiveAddress();
   } else {
-    throw new Error(`Unsupported chain "${activeChain}".`);
+    // eslint-disable-next-line no-console
+    console.error(colors.red(`Unsupported chain "${activeChain}".`));
+    process.exitCode = 1;
+    return;
   }
   const repoCfg = buildRepoConfig(repoName, globalCfg, activeAddress, activeChain);
 
@@ -139,7 +143,13 @@ function buildChainConfig(
       storage_backend: 'ipfs',
     };
   }
-  throw new Error(`Unsupported chain "${activeChain}".`);
+  // eslint-disable-next-line no-console
+  console.error(colors.red(`Unsupported chain "${activeChain}".`));
+  process.exitCode = 1;
+  return {
+    author: activeAddress || 'unknown',
+    storage_backend: 'ipfs',
+  };
 }
 
 function resolveNetwork(activeChain: string, globalCfg: GlobalConfig): string {

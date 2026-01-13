@@ -1,3 +1,7 @@
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import { formatUnits } from 'ethers';
 import { colors } from '../lib/ui';
 import { readActiveChain, type ChainId } from '../lib/chain';
 import {
@@ -16,150 +20,216 @@ import {
   readActiveEvmAddress,
   setActiveEvmAddress,
 } from '../lib/evmKeys';
+import { createMantleProvider, resolveEvmTxContext, resolveMantleConfig } from '../lib/evmProvider';
 import { readRepoConfig, requireWitDir, setChainAuthor, writeRepoConfig } from '../lib/repo';
 
 export async function accountListAction(): Promise<void> {
-  const activeChain = await readActiveChain();
-  if (activeChain === 'mantle') {
-    const active = await readActiveEvmAddress();
-    const keys = await listEvmKeys();
-    if (!keys.length) {
-      // eslint-disable-next-line no-console
-      console.log('No keys found. Generate one with `wit account generate`.');
-      return;
+  try {
+    const activeChain = await readActiveChain();
+    if (activeChain === 'mantle') {
+      const active = await readActiveEvmAddress();
+      const keys = await listEvmKeys();
+      if (!keys.length) {
+        // eslint-disable-next-line no-console
+        console.log('No keys found. Generate one with `wit account generate`.');
+        return;
+      }
+      for (const key of keys) {
+        const marker = active && key.address === active ? colors.green('*') : ' ';
+        const alias = key.alias ? ` (${key.alias})` : '';
+        const created = key.createdAt ? ` ${colors.gray(`[${key.createdAt}]`)}` : '';
+        // eslint-disable-next-line no-console
+        console.log(`${marker} ${colors.hash(key.address)}${alias}${created}`);
+      }
+    } else if (activeChain === 'sui') {
+      const active = await readActiveAddress();
+      const keys = await listStoredKeys();
+      if (!keys.length) {
+        // eslint-disable-next-line no-console
+        console.log('No keys found. Generate one with `wit account generate`.');
+        return;
+      }
+      for (const key of keys) {
+        const marker = active && key.address === active ? colors.green('*') : ' ';
+        const alias = key.alias ? ` (${key.alias})` : '';
+        const created = key.createdAt ? ` ${colors.gray(`[${key.createdAt}]`)}` : '';
+        // eslint-disable-next-line no-console
+        console.log(`${marker} ${colors.hash(key.address)}${alias}${created}`);
+      }
+    } else {
+      printError(`Unsupported chain "${activeChain}".`);
     }
-    for (const key of keys) {
-      const marker = active && key.address === active ? colors.green('*') : ' ';
-      const alias = key.alias ? ` (${key.alias})` : '';
-      const created = key.createdAt ? ` ${colors.gray(`[${key.createdAt}]`)}` : '';
-      // eslint-disable-next-line no-console
-      console.log(`${marker} ${colors.hash(key.address)}${alias}${created}`);
-    }
-  } else if (activeChain === 'sui') {
-    const active = await readActiveAddress();
-    const keys = await listStoredKeys();
-    if (!keys.length) {
-      // eslint-disable-next-line no-console
-      console.log('No keys found. Generate one with `wit account generate`.');
-      return;
-    }
-    for (const key of keys) {
-      const marker = active && key.address === active ? colors.green('*') : ' ';
-      const alias = key.alias ? ` (${key.alias})` : '';
-      const created = key.createdAt ? ` ${colors.gray(`[${key.createdAt}]`)}` : '';
-      // eslint-disable-next-line no-console
-      console.log(`${marker} ${colors.hash(key.address)}${alias}${created}`);
-    }
-  } else {
-    throw new Error(`Unsupported chain "${activeChain}".`);
+  } catch (err) {
+    printError(errorMessage(err));
   }
 }
 
 export async function accountUseAction(address: string): Promise<void> {
-  if (!address) {
-    throw new Error('Address is required. Usage: wit account use <address>');
-  }
-  const activeChain = await readActiveChain();
-  if (activeChain === 'mantle') {
-    const target = normalizeEvmAddress(address);
-    const keys = await listEvmKeys();
-    const match = keys.find((k) => k.address === target);
-    if (!match) {
-      throw new Error(`Key not found for address ${target}. Generate one with "wit account generate".`);
+  try {
+    if (!address) {
+      printError('Address is required. Usage: wit account use <address>');
+      return;
     }
+    const activeChain = await readActiveChain();
+    if (activeChain === 'mantle') {
+      const target = normalizeEvmAddress(address);
+      const keys = await listEvmKeys();
+      const match = keys.find((k) => k.address === target);
+      if (!match) {
+        printError(`Key not found for address ${target}. Generate one with "wit account generate".`);
+        return;
+      }
 
-    await setActiveEvmAddress(target, { alias: match.alias, updateAuthorIfUnknown: true });
-    await maybeUpdateRepoAuthor(target, activeChain);
+      await setActiveEvmAddress(target, { alias: match.alias, updateAuthorIfUnknown: true });
+      await maybeUpdateRepoAuthor(target, activeChain);
 
-    // eslint-disable-next-line no-console
-    console.log(`Switched active account to ${colors.hash(target)}${match.alias ? ` (${match.alias})` : ''}`);
-  } else if (activeChain === 'sui') {
-    const target = normalizeAddress(address);
-    const keys = await listStoredKeys();
-    const match = keys.find((k) => k.address === target);
-    if (!match) {
-      throw new Error(`Key not found for address ${target}. Generate one with "wit account generate".`);
+      // eslint-disable-next-line no-console
+      console.log(`Switched active account to ${colors.hash(target)}${match.alias ? ` (${match.alias})` : ''}`);
+    } else if (activeChain === 'sui') {
+      const target = normalizeAddress(address);
+      const keys = await listStoredKeys();
+      const match = keys.find((k) => k.address === target);
+      if (!match) {
+        printError(`Key not found for address ${target}. Generate one with "wit account generate".`);
+        return;
+      }
+
+      await setActiveAddress(target, { alias: match.alias, updateAuthorIfUnknown: true });
+      await maybeUpdateRepoAuthor(target, activeChain);
+
+      // eslint-disable-next-line no-console
+      console.log(`Switched active account to ${colors.hash(target)}${match.alias ? ` (${match.alias})` : ''}`);
+    } else {
+      printError(`Unsupported chain "${activeChain}".`);
     }
-
-    await setActiveAddress(target, { alias: match.alias, updateAuthorIfUnknown: true });
-    await maybeUpdateRepoAuthor(target, activeChain);
-
-    // eslint-disable-next-line no-console
-    console.log(`Switched active account to ${colors.hash(target)}${match.alias ? ` (${match.alias})` : ''}`);
-  } else {
-    throw new Error(`Unsupported chain "${activeChain}".`);
+  } catch (err) {
+    printError(errorMessage(err));
   }
 }
 
 export async function accountGenerateAction(opts: { alias?: string }): Promise<void> {
-  const alias = opts.alias?.trim() || 'default';
-  const activeChain = await readActiveChain();
-  if (activeChain === 'mantle') {
-    const { address } = await createEvmKey(alias);
-    await maybeUpdateRepoAuthor(address, activeChain);
-    // eslint-disable-next-line no-console
-    console.log(`Generated new account ${colors.hash(address)} (${alias}) and set as active.`);
-  } else if (activeChain === 'sui') {
-    const { address } = await createSigner(alias);
-    await maybeUpdateRepoAuthor(address, activeChain);
-    // eslint-disable-next-line no-console
-    console.log(`Generated new account ${colors.hash(address)} (${alias}) and set as active.`);
-  } else {
-    throw new Error(`Unsupported chain "${activeChain}".`);
+  try {
+    const alias = opts.alias?.trim() || 'default';
+    const activeChain = await readActiveChain();
+    if (activeChain === 'mantle') {
+      const { address } = await createEvmKey(alias);
+      await maybeUpdateRepoAuthor(address, activeChain);
+      // eslint-disable-next-line no-console
+      console.log(`Generated new account ${colors.hash(address)} (${alias}) and set as active.`);
+    } else if (activeChain === 'sui') {
+      const { address } = await createSigner(alias);
+      await maybeUpdateRepoAuthor(address, activeChain);
+      // eslint-disable-next-line no-console
+      console.log(`Generated new account ${colors.hash(address)} (${alias}) and set as active.`);
+    } else {
+      printError(`Unsupported chain "${activeChain}".`);
+    }
+  } catch (err) {
+    printError(errorMessage(err));
   }
 }
 
 export async function accountImportAction(privateKey: string, opts: { alias?: string }): Promise<void> {
-  if (!privateKey) {
-    throw new Error('Private key is required. Usage: wit account import <private_key>');
-  }
-  const alias = opts.alias?.trim() || 'default';
-  const activeChain = await readActiveChain();
-  if (activeChain === 'mantle') {
-    const { address } = await importEvmKey(privateKey, alias);
-    await maybeUpdateRepoAuthor(address, activeChain);
-    // eslint-disable-next-line no-console
-    console.log(`Imported account ${colors.hash(address)} (${alias}) and set as active.`);
-  } else if (activeChain === 'sui') {
-    throw new Error('Sui key import is not supported yet.');
-  } else {
-    throw new Error(`Unsupported chain "${activeChain}".`);
+  try {
+    if (!privateKey) {
+      printError('Private key is required. Usage: wit account import <private_key>');
+      return;
+    }
+    const alias = opts.alias?.trim() || 'default';
+    const activeChain = await readActiveChain();
+    if (activeChain === 'mantle') {
+      const { address } = await importEvmKey(privateKey, alias);
+      await maybeUpdateRepoAuthor(address, activeChain);
+      // eslint-disable-next-line no-console
+      console.log(`Imported account ${colors.hash(address)} (${alias}) and set as active.`);
+    } else if (activeChain === 'sui') {
+      printError('Sui key import is not supported yet.');
+    } else {
+      printError(`Unsupported chain "${activeChain}".`);
+    }
+  } catch (err) {
+    printError(errorMessage(err));
   }
 }
 
 export async function accountBalanceAction(addressArg?: string): Promise<void> {
-  const activeChain = await readActiveChain();
-  if (activeChain === 'mantle') {
-    // eslint-disable-next-line no-console
-    console.log(colors.yellow('Balance for Mantle is not supported yet. Use Sui account or wait for P4-6.'));
-  } else if (activeChain === 'sui') {
-    const target = addressArg ? normalizeAddress(addressArg) : await readActiveAddress();
-    if (!target) {
-      throw new Error('No address provided and no active address configured. Use `wit account generate` or `wit account use <address>` first.');
-    }
-    const res = await checkResources(target);
+  try {
+    const activeChain = await readActiveChain();
+    if (activeChain === 'mantle') {
+      const address = addressArg ? normalizeEvmAddress(addressArg) : await readActiveEvmAddress();
+      if (!address) {
+        printError('No address provided and no active address configured. Use `wit account generate` or `wit account use <address>` first.');
+        return;
+      }
+      const networkHint = await readMantleNetworkHint();
+      const config = resolveMantleConfig(networkHint);
+      const provider = createMantleProvider(config.network);
+      const balance = await provider.getBalance(address);
+      const txContext = await resolveEvmTxContext(provider, address, { to: address, value: 0n });
 
-    // eslint-disable-next-line no-console
-    console.log(colors.header(`Account ${colors.hash(target)}`));
-    if (res.error) {
       // eslint-disable-next-line no-console
-      console.log(`SUI: ${colors.red('error')} ${res.error}`);
-    } else {
-      const badgeSui = res.hasMinSui === false ? colors.red('(low)') : res.hasMinSui ? colors.green('(ok)') : colors.yellow('(unknown)');
+      console.log(colors.header(`Account ${colors.hash(address)}`));
       // eslint-disable-next-line no-console
-      console.log(`SUI: ${formatBalance(res.suiBalance ?? 0n, 'SUI')} ${badgeSui}`);
-    }
+      console.log(`Network: ${config.chainName} (${config.chainId}, ${config.network})`);
+      // eslint-disable-next-line no-console
+      console.log(`RPC: ${config.rpcUrl}`);
+      // eslint-disable-next-line no-console
+      console.log(`MNT: ${formatUnits(balance, 18)} MNT`);
 
-    if (res.walError) {
+      const gasLimit = txContext.gasLimit;
+      const feeData = txContext.feeData;
+      const gasPrice = feeData.maxFeePerGas ?? feeData.gasPrice;
+      const gasCost = gasLimit && gasPrice ? gasLimit * gasPrice : null;
+      const gasLabel = gasLimit ? gasLimit.toString() : 'n/a';
+      const maxFee = feeData.maxFeePerGas ? `${formatUnits(feeData.maxFeePerGas, 9)} gwei` : 'n/a';
+      const maxPriority = feeData.maxPriorityFeePerGas ? `${formatUnits(feeData.maxPriorityFeePerGas, 9)} gwei` : 'n/a';
+      const gasPriceLabel = feeData.gasPrice ? `${formatUnits(feeData.gasPrice, 9)} gwei` : 'n/a';
+      const gasCostLabel = gasCost ? `${formatUnits(gasCost, 18)} MNT` : 'n/a';
+
       // eslint-disable-next-line no-console
-      console.log(`WAL: ${colors.red('error')} ${res.walError}`);
+      console.log(colors.cyan('Gas estimate (simple transfer):'));
+      // eslint-disable-next-line no-console
+      console.log(`  gasLimit: ${gasLabel}`);
+      // eslint-disable-next-line no-console
+      console.log(`  maxFeePerGas: ${maxFee}`);
+      // eslint-disable-next-line no-console
+      console.log(`  maxPriorityFeePerGas: ${maxPriority}`);
+      // eslint-disable-next-line no-console
+      console.log(`  gasPrice: ${gasPriceLabel}`);
+      // eslint-disable-next-line no-console
+      console.log(`  estCost: ${gasCostLabel}`);
+    } else if (activeChain === 'sui') {
+      const target = addressArg ? normalizeAddress(addressArg) : await readActiveAddress();
+      if (!target) {
+        printError('No address provided and no active address configured. Use `wit account generate` or `wit account use <address>` first.');
+        return;
+      }
+      const res = await checkResources(target);
+
+      // eslint-disable-next-line no-console
+      console.log(colors.header(`Account ${colors.hash(target)}`));
+      if (res.error) {
+        // eslint-disable-next-line no-console
+        console.log(`SUI: ${colors.red('error')} ${res.error}`);
+      } else {
+        const badgeSui = res.hasMinSui === false ? colors.red('(low)') : res.hasMinSui ? colors.green('(ok)') : colors.yellow('(unknown)');
+        // eslint-disable-next-line no-console
+        console.log(`SUI: ${formatBalance(res.suiBalance ?? 0n, 'SUI')} ${badgeSui}`);
+      }
+
+      if (res.walError) {
+        // eslint-disable-next-line no-console
+        console.log(`WAL: ${colors.red('error')} ${res.walError}`);
+      } else {
+        const badgeWal = res.hasMinWal === false ? colors.red('(low)') : res.hasMinWal ? colors.green('(ok)') : colors.yellow('(unknown)');
+        // eslint-disable-next-line no-console
+        console.log(`WAL: ${formatBalance(res.walBalance ?? 0n, 'WAL')} ${badgeWal}`);
+      }
     } else {
-      const badgeWal = res.hasMinWal === false ? colors.red('(low)') : res.hasMinWal ? colors.green('(ok)') : colors.yellow('(unknown)');
-      // eslint-disable-next-line no-console
-      console.log(`WAL: ${formatBalance(res.walBalance ?? 0n, 'WAL')} ${badgeWal}`);
+      printError(`Unsupported chain "${activeChain}".`);
     }
-  } else {
-    throw new Error(`Unsupported chain "${activeChain}".`);
+  } catch (err) {
+    printError(errorMessage(err));
   }
 }
 
@@ -189,5 +259,40 @@ async function maybeUpdateRepoAuthor(address: string, chain: ChainId): Promise<v
   } catch (err: any) {
     // eslint-disable-next-line no-console
     console.warn(`Warning: could not update .wit/config.json author: ${err.message}`);
+  }
+}
+
+function printError(message: string): void {
+  // eslint-disable-next-line no-console
+  console.error(colors.red(message));
+  process.exitCode = 1;
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  return String(err);
+}
+
+async function readMantleNetworkHint(): Promise<string | null> {
+  try {
+    const witDir = await requireWitDir();
+    const repoCfg = await readRepoConfig(witDir);
+    if (repoCfg.network) return repoCfg.network;
+  } catch (err: any) {
+    if (err?.message?.includes('Not a wit repository')) {
+      // ignore
+    } else {
+      throw err;
+    }
+  }
+
+  const configPath = path.join(os.homedir(), '.witconfig');
+  try {
+    const raw = await fs.readFile(configPath, 'utf8');
+    const cfg = JSON.parse(raw) as { network?: string };
+    return cfg.network ?? null;
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return null;
+    throw err;
   }
 }
