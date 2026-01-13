@@ -23,3 +23,11 @@ export async function chainUseAction(chainArg: string): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(`Active chain set to ${colors.green(chain)}.`);
 }
+
+export async function chainCurrentAction(): Promise<void> {
+  const active = await readActiveChain();
+  const info = listSupportedChains().find((chain) => chain.id === active);
+  const label = info?.label ? ` (${info.label})` : '';
+  // eslint-disable-next-line no-console
+  console.log(`${active}${label}`);
+}
