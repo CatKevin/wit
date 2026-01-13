@@ -30,6 +30,7 @@ import { getRepoChainMismatch, readRepoConfig, requireWitDir } from '../lib/repo
 import { carMapAction, carPackAction, carUnpackAction } from './ipfsCar';
 import { lighthouseUploadAction } from './lighthouse';
 import { lighthouseDownloadAction } from './lighthouseDownload';
+import { lighthousePinAction } from './lighthousePin';
 
 function shouldSkipChainCheck(cmd: Command): boolean {
   const parent = cmd.parent;
@@ -269,6 +270,16 @@ export function registerCommands(program: Command): void {
     .option('--gateway <url>', 'override gateway URL')
     .action((cid: string, opts: { out?: string; car?: boolean; verify?: boolean; retries?: number; retryDelay?: number; timeout?: number; gateway?: string }) =>
       lighthouseDownloadAction(cid, opts));
+
+  program
+    .command('lighthouse-pin <cid>')
+    .description('Pin a CID using Lighthouse API')
+    .option('--pin-url <url>', 'override Lighthouse pin URL')
+    .option('--retries <n>', 'retry attempts (default 3)', (v) => parseInt(v, 10), 3)
+    .option('--retry-delay <ms>', 'base retry delay in ms (default 1000)', (v) => parseInt(v, 10), 1000)
+    .option('--timeout <ms>', 'request timeout in ms (default 30000)', (v) => parseInt(v, 10), 30_000)
+    .action((cid: string, opts: { pinUrl?: string; retries?: number; retryDelay?: number; timeout?: number }) =>
+      lighthousePinAction(cid, opts));
 
   program
     .command('list')

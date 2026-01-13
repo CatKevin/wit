@@ -36,6 +36,21 @@ export type LighthouseUploadResult = {
   raw: unknown;
 };
 
+export type LighthousePinOptions = {
+  apiKey?: string;
+  pinUrl?: string;
+  timeoutMs?: number;
+  retries?: number;
+  retryDelayMs?: number;
+  onRetry?: (attempt: number, err: Error, delayMs: number) => void;
+};
+
+export type LighthousePinResult = {
+  cid: string;
+  pinUrl: string;
+  raw: unknown;
+};
+
 type LighthouseGlobalConfig = {
   lighthouse_api_key?: string;
   lighthouse_upload_url?: string;
@@ -54,6 +69,8 @@ type LighthouseGlobalConfig = {
 let dotenvLoaded = false;
 let globalConfigLoaded = false;
 let globalConfigCache: LighthouseGlobalConfig = {};
+
+const DEFAULT_LIGHTHOUSE_PIN_URL = 'https://api.lighthouse.storage/api/lighthouse/pin';
 
 export function resolveLighthouseApiKey(): string | null {
   loadDotEnvOnce();
@@ -144,6 +161,29 @@ export async function uploadBufferToLighthouse(
   return mapUploadResponse(response);
 }
 
+export async function pinCidWithLighthouse(
+  cid: string,
+  opts: LighthousePinOptions = {},
+): Promise<LighthousePinResult> {
+  if (!cid) {
+    throw new Error('CID is required to pin.');
+  }
+  const apiKey = opts.apiKey || requireLighthouseApiKey();
+  const pinUrl = normalizeEndpointUrl(opts.pinUrl || resolveLighthousePinUrl()) || DEFAULT_LIGHTHOUSE_PIN_URL;
+  const response = await postJsonWithRetry(
+    pinUrl,
+    { cid },
+    {
+      apiKey,
+      timeoutMs: opts.timeoutMs,
+      retries: opts.retries,
+      retryDelayMs: opts.retryDelayMs,
+      onRetry: opts.onRetry,
+    },
+  );
+  return { cid, pinUrl, raw: response };
+}
+
 export async function downloadFromLighthouseGateway(
   cid: string,
   opts: LighthouseGatewayOptions = {},
@@ -231,6 +271,14 @@ type RetryOptions = {
   timeoutMs?: number;
 };
 
+type PostJsonOptions = {
+  apiKey: string;
+  timeoutMs?: number;
+  retries?: number;
+  retryDelayMs?: number;
+  onRetry?: (attempt: number, err: Error, delayMs: number) => void;
+};
+
 type UploadRetryOptions = {
   retries?: number;
   retryDelayMs?: number;
@@ -259,6 +307,64 @@ async function uploadWithRetry<T>(fn: () => Promise<T>, opts: UploadRetryOptions
   }
 
   throw lastError ?? new Error('Lighthouse upload failed.');
+}
+
+async function postJsonWithRetry(url: string, payload: unknown, opts: PostJsonOptions): Promise<unknown> {
+  const retries = normalizeRetryCount(opts.retries, 3);
+  const retryDelayMs = normalizeRetryDelay(opts.retryDelayMs, 1000);
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await postJsonOnce(url, payload, opts.apiKey, opts.timeoutMs);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt >= retries || !shouldRetryUploadError(lastError)) {
+        break;
+      }
+      const delay = computeBackoff(retryDelayMs, attempt);
+      if (opts.onRetry) {
+        opts.onRetry(attempt + 1, lastError, delay);
+      }
+      await sleep(delay);
+    }
+  }
+
+  throw lastError ?? new Error('Lighthouse request failed.');
+}
+
+async function postJsonOnce(
+  url: string,
+  payload: unknown,
+  apiKey: string,
+  timeoutMs?: number,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timeout = timeoutMs ?? 30_000;
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await safeReadText(res);
+      const message = text
+        ? `Pin request failed: ${res.status} ${res.statusText || ''} - ${text}`.trim()
+        : `Pin request failed: ${res.status} ${res.statusText || ''}`.trim();
+      const err = new Error(message);
+      (err as any).status = res.status;
+      throw err;
+    }
+    return await readJsonOrText(res);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function fetchWithRetry(url: string, opts: RetryOptions): Promise<Uint8Array> {
@@ -354,6 +460,24 @@ function normalizeRetryCount(value: number | undefined, fallback: number): numbe
 function normalizeRetryDelay(value: number | undefined, fallback: number): number {
   if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
   return Math.max(0, Math.floor(value));
+}
+
+async function readJsonOrText(res: Response): Promise<unknown> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+async function safeReadText(res: Response): Promise<string> {
+  try {
+    return await res.text();
+  } catch {
+    return '';
+  }
 }
 
 async function verifyCidBytes(cid: string, bytes: Uint8Array, format: 'raw' | 'car'): Promise<void> {
