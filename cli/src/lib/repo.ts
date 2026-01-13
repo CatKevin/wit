@@ -4,6 +4,7 @@ import path from 'path';
 export type RepoConfig = {
   repo_name: string;
   repo_id: string | null;
+  chain?: string;
   network: string;
   relays: string[];
   author: string;

@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { readActiveAddress } from '../lib/keys';
+import { readActiveChain } from '../lib/chain';
 
 type GlobalConfig = {
   author?: string;
@@ -12,6 +13,7 @@ type GlobalConfig = {
 type RepoConfig = {
   repo_name: string;
   repo_id: string | null;
+  chain: string;
   network: string;
   relays: string[];
   author: string;
@@ -39,7 +41,8 @@ export async function initAction(name?: string, options?: InitOptions): Promise<
 
   const globalCfg = await readGlobalConfig();
   const activeAddress = await readActiveAddress();
-  const repoCfg = buildRepoConfig(repoName, globalCfg, activeAddress);
+  const activeChain = await readActiveChain();
+  const repoCfg = buildRepoConfig(repoName, globalCfg, activeAddress, activeChain);
 
   const wantsPrivate = options?.private || Boolean(options?.sealPolicy || options?.sealSecret);
   if (wantsPrivate) {
@@ -91,10 +94,16 @@ async function readGlobalConfig(): Promise<GlobalConfig> {
   }
 }
 
-function buildRepoConfig(repoName: string, globalCfg: GlobalConfig, activeAddress?: string | null): RepoConfig {
+function buildRepoConfig(
+  repoName: string,
+  globalCfg: GlobalConfig,
+  activeAddress: string | null | undefined,
+  activeChain: string,
+): RepoConfig {
   return {
     repo_name: repoName,
     repo_id: null,
+    chain: activeChain,
     network: globalCfg.network || DEFAULT_NETWORK,
     relays: globalCfg.relays?.length ? globalCfg.relays : DEFAULT_RELAYS,
     author: globalCfg.author || 'unknown',

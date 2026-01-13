@@ -12,6 +12,7 @@ import { idToFileName, writeCommitIdMap, readCommitIdMap } from '../lib/state';
 import { writeRemoteRef, writeRemoteState, writeRepoConfig } from '../lib/repo';
 import { decryptWithSeal } from '../lib/seal';
 import { loadSigner } from '../lib/keys';
+import { readActiveChain } from '../lib/chain';
 
 type RemoteCommit = {
   tree: { root_hash: string; manifest_id: string | null; quilt_id: string | null };
@@ -228,9 +229,12 @@ async function ensureLayout(cwd: string, repoId: string): Promise<string> {
     await fs.access(cfgPath);
   } catch (err: any) {
     if (err?.code === 'ENOENT') {
+      const activeChain = await readActiveChain();
+      const repoChain = inferRepoChain(repoId, activeChain);
       const cfg = {
         repo_name: repoId,
         repo_id: repoId,
+        chain: repoChain,
         network: DEFAULT_NETWORK,
         relays: DEFAULT_RELAYS,
         author: 'unknown',
@@ -246,6 +250,12 @@ async function ensureLayout(cwd: string, repoId: string): Promise<string> {
 
   await fs.writeFile(path.join(witPath, 'HEAD'), 'refs/heads/main\n', 'utf8');
   return witPath;
+}
+
+function inferRepoChain(repoId: string, fallback: string): string {
+  if (repoId.startsWith('mantle-testnet:')) return 'mantle-testnet';
+  if (repoId.startsWith('sui:')) return 'sui';
+  return fallback;
 }
 
 async function ensureHeadFiles(witPath: string, headCommit: string): Promise<void> {
