@@ -120,6 +120,24 @@ export async function listEvmKeys(): Promise<EvmKeyInfo[]> {
   return keys.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 }
 
+export async function loadEvmKey(address?: string): Promise<LoadedEvmKey> {
+  const resolvedAddress = address ? normalizeEvmAddress(address) : await readActiveEvmAddress();
+  if (!resolvedAddress) {
+    throw new Error('No active EVM address configured. Generate a key with `wit account generate` or set one with `wit account use`.');
+  }
+  const file = await findKeyFile(resolvedAddress);
+  if (!file) {
+    throw new Error(`Key file not found for address ${resolvedAddress}. Generate one with \`wit account generate\`.`);
+  }
+  const parsed = await readKeyFile(file);
+  return {
+    address: normalizeEvmAddress(parsed.address),
+    privateKey: parsed.privateKey,
+    publicKey: parsed.publicKey,
+    file,
+  };
+}
+
 export async function readActiveEvmAddress(): Promise<string | null> {
   const cfg = await readGlobalConfig();
   const fromMap = cfg.active_addresses?.[EVM_CHAIN_ID];
@@ -174,6 +192,17 @@ export function normalizeEvmAddressMaybe(address?: string | null): string | null
 
 function keyPathFor(address: string): string {
   return path.join(EVM_KEY_HOME, `${normalizeEvmAddress(address)}.key`);
+}
+
+async function findKeyFile(address: string): Promise<string | null> {
+  const file = keyPathFor(address);
+  try {
+    await fs.access(file);
+    return file;
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') throw err;
+  }
+  return null;
 }
 
 function normalizePrivateKey(input: string): string {
