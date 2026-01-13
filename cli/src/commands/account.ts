@@ -98,9 +98,15 @@ async function maybeUpdateRepoAuthor(address: string): Promise<void> {
   }
   try {
     const raw = await fs.readFile(repoCfgPath, 'utf8');
-    const cfg = JSON.parse(raw) as { author?: string };
+    const cfg = JSON.parse(raw) as { author?: string; chain?: string; chains?: Record<string, any> };
+    if (cfg.chain && cfg.chain !== 'sui') {
+      return;
+    }
     if (!cfg.author || cfg.author === 'unknown') {
       cfg.author = address;
+      if (cfg.chains?.sui && typeof cfg.chains.sui === 'object') {
+        cfg.chains.sui.author = address;
+      }
       await fs.writeFile(repoCfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
       // eslint-disable-next-line no-console
       console.log(colors.green(`Updated .wit/config.json author to ${address}`));

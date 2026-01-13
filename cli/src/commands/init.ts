@@ -14,6 +14,7 @@ type RepoConfig = {
   repo_name: string;
   repo_id: string | null;
   chain: string;
+  chains: Record<string, ChainConfig>;
   network: string;
   relays: string[];
   author: string;
@@ -22,9 +23,32 @@ type RepoConfig = {
   created_at: string;
 };
 
+type ChainConfig = {
+  author: string;
+  key_alias?: string;
+  network?: string;
+  relays?: string[];
+  seal_policy_id?: string | null;
+  storage_backend?: 'walrus' | 'ipfs';
+  rpc_url?: string;
+  chain_id?: number;
+  block_explorer?: string;
+  native_symbol?: string;
+  ipfs_gateway_url?: string;
+  lighthouse_upload_url?: string;
+  lighthouse_api_base?: string;
+};
+
 const DEFAULT_RELAYS = ['https://upload-relay.testnet.walrus.space'];
 const DEFAULT_NETWORK = 'testnet';
 const IGNORE_ENTRIES = ['.wit/', '~/.wit/keys', '.env.local', '*.pem', '.wit/seal'];
+const DEFAULT_MANTLE_RPC_URL = 'https://rpc.sepolia.mantle.xyz';
+const DEFAULT_MANTLE_CHAIN_ID = 5003;
+const DEFAULT_MANTLE_EXPLORER = 'https://sepolia.mantlescan.xyz';
+const DEFAULT_MANTLE_NATIVE_SYMBOL = 'MNT';
+const DEFAULT_LIGHTHOUSE_UPLOAD_URL = 'https://upload.lighthouse.storage/api/v0/add';
+const DEFAULT_LIGHTHOUSE_API_BASE = 'https://api.lighthouse.storage';
+const DEFAULT_LIGHTHOUSE_GATEWAY_URL = 'https://gateway.lighthouse.storage/ipfs/';
 
 type InitOptions = {
   private?: boolean;
@@ -100,16 +124,50 @@ function buildRepoConfig(
   activeAddress: string | null | undefined,
   activeChain: string,
 ): RepoConfig {
+  const network = globalCfg.network || DEFAULT_NETWORK;
+  const relays = globalCfg.relays?.length ? globalCfg.relays : DEFAULT_RELAYS;
+  const chainConfig = buildChainConfig(activeChain, globalCfg, activeAddress, network, relays);
   return {
     repo_name: repoName,
     repo_id: null,
     chain: activeChain,
-    network: globalCfg.network || DEFAULT_NETWORK,
-    relays: globalCfg.relays?.length ? globalCfg.relays : DEFAULT_RELAYS,
-    author: globalCfg.author || 'unknown',
-    key_alias: globalCfg.key_alias || 'default',
+    chains: { [activeChain]: chainConfig },
+    network,
+    relays,
+    author: chainConfig.author,
+    key_alias: chainConfig.key_alias || 'default',
     seal_policy_id: null,
     created_at: new Date().toISOString(),
+  };
+}
+
+function buildChainConfig(
+  activeChain: string,
+  globalCfg: GlobalConfig,
+  activeAddress: string | null | undefined,
+  network: string,
+  relays: string[],
+): ChainConfig {
+  if (activeChain === 'sui') {
+    return {
+      author: activeAddress || globalCfg.author || 'unknown',
+      key_alias: globalCfg.key_alias || 'default',
+      network,
+      relays,
+      seal_policy_id: null,
+      storage_backend: 'walrus',
+    };
+  }
+  return {
+    author: 'unknown',
+    storage_backend: 'ipfs',
+    rpc_url: DEFAULT_MANTLE_RPC_URL,
+    chain_id: DEFAULT_MANTLE_CHAIN_ID,
+    block_explorer: DEFAULT_MANTLE_EXPLORER,
+    native_symbol: DEFAULT_MANTLE_NATIVE_SYMBOL,
+    ipfs_gateway_url: DEFAULT_LIGHTHOUSE_GATEWAY_URL,
+    lighthouse_upload_url: DEFAULT_LIGHTHOUSE_UPLOAD_URL,
+    lighthouse_api_base: DEFAULT_LIGHTHOUSE_API_BASE,
   };
 }
 

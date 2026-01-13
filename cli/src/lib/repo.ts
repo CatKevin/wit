@@ -5,6 +5,7 @@ export type RepoConfig = {
   repo_name: string;
   repo_id: string | null;
   chain?: string;
+  chains?: Record<string, ChainConfig>;
   network: string;
   relays: string[];
   author: string;
@@ -12,6 +13,22 @@ export type RepoConfig = {
   seal_policy_id: string | null;
   created_at: string;
   description?: string;
+};
+
+export type ChainConfig = {
+  author: string;
+  key_alias?: string;
+  network?: string;
+  relays?: string[];
+  seal_policy_id?: string | null;
+  storage_backend?: 'walrus' | 'ipfs';
+  rpc_url?: string;
+  chain_id?: number;
+  block_explorer?: string;
+  native_symbol?: string;
+  ipfs_gateway_url?: string;
+  lighthouse_upload_url?: string;
+  lighthouse_api_base?: string;
 };
 
 export type RemoteState = {
