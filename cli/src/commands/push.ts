@@ -8,7 +8,17 @@ import { computeRootHash } from '../lib/manifest';
 import { canonicalStringify, sha256Base64 } from '../lib/serialize';
 import { ensureDirForFile, readBlob } from '../lib/fs';
 import { readCommitById, readCommitIdMap, readHeadRefPath, readRef, writeCommitIdMap, idToFileName, type CommitObject } from '../lib/state';
-import { readRepoConfig, writeRepoConfig, writeRemoteState, requireWitDir, writeRemoteRef } from '../lib/repo';
+import {
+  readRepoConfig,
+  resolveChainAuthor,
+  resolveSuiSealPolicyId,
+  setChainAuthor,
+  setSuiSealPolicyId,
+  writeRepoConfig,
+  writeRemoteState,
+  requireWitDir,
+  writeRemoteRef,
+} from '../lib/repo';
 import { WalrusService, resolveWalrusConfig } from '../lib/walrus';
 import { loadSigner, checkResources } from '../lib/keys';
 import { fetchRepositoryStateWithRetry, createRepository, updateRepositoryHead } from '../lib/suiRepo';
@@ -49,7 +59,8 @@ export async function pushAction(): Promise<void> {
 
   let repoId = repoCfg.repo_id;
   if (!repoId) {
-    const isPrivate = repoCfg.seal_policy_id === 'pending' || !!repoCfg.seal_policy_id;
+    const sealPolicyId = resolveSuiSealPolicyId(repoCfg);
+    const isPrivate = sealPolicyId === 'pending' || !!sealPolicyId;
     repoId = await createRepository(suiClient, signerInfo.signer, {
       name: repoCfg.repo_name,
       description: repoCfg.repo_name,
@@ -65,14 +76,16 @@ export async function pushAction(): Promise<void> {
   const onchainState = await fetchRepositoryStateWithRetry(suiClient, repoId);
 
   // Update local seal policy ID if it was pending or changed
-  if (onchainState.sealPolicyId && repoCfg.seal_policy_id !== onchainState.sealPolicyId) {
-    repoCfg.seal_policy_id = onchainState.sealPolicyId;
+  const localPolicyId = resolveSuiSealPolicyId(repoCfg);
+  if (onchainState.sealPolicyId && onchainState.sealPolicyId !== localPolicyId) {
+    setSuiSealPolicyId(repoCfg, onchainState.sealPolicyId);
     await writeRepoConfig(witPath, repoCfg);
     // eslint-disable-next-line no-console
     console.log(colors.cyan(`Seal policy updated from chain: ${onchainState.sealPolicyId}`));
   }
 
-  const currentPolicyId = repoCfg.seal_policy_id === 'pending' ? null : repoCfg.seal_policy_id;
+  const updatedPolicyId = resolveSuiSealPolicyId(repoCfg);
+  const currentPolicyId = updatedPolicyId === 'pending' ? null : updatedPolicyId;
 
   if (onchainState.headCommit && baseRemoteId !== onchainState.headCommit) {
     throw new Error('Remote head diverges from local history; run `wit pull`/`fetch` or reset first.');
@@ -380,18 +393,18 @@ async function cacheJson(filePath: string, content: string): Promise<void> {
 }
 
 async function ensureAuthorOrSetDefault(witPath: string, repoCfg: any, signerAddress: string): Promise<void> {
-  const current = (repoCfg.author || '').trim().toLowerCase();
+  const current = resolveChainAuthor(repoCfg).trim().toLowerCase();
   const signer = signerAddress.toLowerCase();
   if (!current || current === 'unknown') {
-    const next = { ...repoCfg, author: signerAddress };
-    await writeRepoConfig(witPath, next);
+    setChainAuthor(repoCfg, repoCfg.chain, signerAddress);
+    await writeRepoConfig(witPath, repoCfg);
     // eslint-disable-next-line no-console
     console.log(colors.cyan(`Author set to active address ${signerAddress}`));
     return;
   }
   if (current !== signer) {
     // eslint-disable-next-line no-console
-    console.warn(`Warning: author (${repoCfg.author}) differs from signer (${signerAddress}). Push will use signer.`);
+    console.warn(`Warning: author (${resolveChainAuthor(repoCfg)}) differs from signer (${signerAddress}). Push will use signer.`);
   }
 }
 

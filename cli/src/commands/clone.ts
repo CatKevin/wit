@@ -9,7 +9,7 @@ import { computeRootHash } from '../lib/manifest';
 import { canonicalStringify, sha256Base64 } from '../lib/serialize';
 import { ensureDirForFile, writeIndex, type Index } from '../lib/fs';
 import { idToFileName, writeCommitIdMap, readCommitIdMap } from '../lib/state';
-import { writeRemoteRef, writeRemoteState, writeRepoConfig } from '../lib/repo';
+import { setSuiSealPolicyId, writeRemoteRef, writeRemoteState, writeRepoConfig } from '../lib/repo';
 import { decryptWithSeal } from '../lib/seal';
 import { loadSigner } from '../lib/keys';
 import { readActiveChain } from '../lib/chain';
@@ -25,13 +25,6 @@ type RemoteCommit = {
 
 const DEFAULT_RELAYS = ['https://upload-relay.testnet.walrus.space'];
 const DEFAULT_NETWORK = 'testnet';
-const DEFAULT_MANTLE_RPC_URL = 'https://rpc.sepolia.mantle.xyz';
-const DEFAULT_MANTLE_CHAIN_ID = 5003;
-const DEFAULT_MANTLE_EXPLORER = 'https://sepolia.mantlescan.xyz';
-const DEFAULT_MANTLE_NATIVE_SYMBOL = 'MNT';
-const DEFAULT_LIGHTHOUSE_UPLOAD_URL = 'https://upload.lighthouse.storage/api/v0/add';
-const DEFAULT_LIGHTHOUSE_API_BASE = 'https://api.lighthouse.storage';
-const DEFAULT_LIGHTHOUSE_GATEWAY_URL = 'https://gateway.lighthouse.storage/ipfs/';
 
 export async function cloneAction(repoId: string): Promise<void> {
   if (!repoId) {
@@ -77,7 +70,7 @@ export async function cloneAction(repoId: string): Promise<void> {
     try {
       const cfgRaw = await fs.readFile(path.join(witPath, 'config.json'), 'utf8');
       const cfg = JSON.parse(cfgRaw);
-      cfg.seal_policy_id = onchain.sealPolicyId;
+      setSuiSealPolicyId(cfg as any, onchain.sealPolicyId);
       await writeRepoConfig(witPath, cfg as any);
     } catch {
       // best-effort
@@ -244,11 +237,7 @@ async function ensureLayout(cwd: string, repoId: string): Promise<string> {
         repo_id: repoId,
         chain: repoChain,
         chains: { [repoChain]: chainConfig },
-        network: DEFAULT_NETWORK,
-        relays: DEFAULT_RELAYS,
-        author: chainConfig.author,
-        key_alias: chainConfig.key_alias || 'default',
-        seal_policy_id: null,
+        network: inferNetwork(repoChain),
         created_at: new Date().toISOString(),
       };
       await writeRepoConfig(witPath, cfg as any);
@@ -262,9 +251,14 @@ async function ensureLayout(cwd: string, repoId: string): Promise<string> {
 }
 
 function inferRepoChain(repoId: string, fallback: string): string {
-  if (repoId.startsWith('mantle-testnet:')) return 'mantle-testnet';
+  if (repoId.startsWith('mantle:')) return 'mantle';
   if (repoId.startsWith('sui:')) return 'sui';
   return fallback;
+}
+
+function inferNetwork(repoChain: string): string {
+  if (repoChain === 'mantle') return 'testnet';
+  return DEFAULT_NETWORK;
 }
 
 function buildChainConfig(repoChain: string): {
@@ -274,13 +268,6 @@ function buildChainConfig(repoChain: string): {
   relays?: string[];
   seal_policy_id?: string | null;
   storage_backend?: 'walrus' | 'ipfs';
-  rpc_url?: string;
-  chain_id?: number;
-  block_explorer?: string;
-  native_symbol?: string;
-  ipfs_gateway_url?: string;
-  lighthouse_upload_url?: string;
-  lighthouse_api_base?: string;
 } {
   if (repoChain === 'sui') {
     return {
@@ -295,13 +282,6 @@ function buildChainConfig(repoChain: string): {
   return {
     author: 'unknown',
     storage_backend: 'ipfs',
-    rpc_url: DEFAULT_MANTLE_RPC_URL,
-    chain_id: DEFAULT_MANTLE_CHAIN_ID,
-    block_explorer: DEFAULT_MANTLE_EXPLORER,
-    native_symbol: DEFAULT_MANTLE_NATIVE_SYMBOL,
-    ipfs_gateway_url: DEFAULT_LIGHTHOUSE_GATEWAY_URL,
-    lighthouse_upload_url: DEFAULT_LIGHTHOUSE_UPLOAD_URL,
-    lighthouse_api_base: DEFAULT_LIGHTHOUSE_API_BASE,
   };
 }
 

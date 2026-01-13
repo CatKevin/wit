@@ -6,7 +6,15 @@ import {ManifestSchema} from '../lib/schema';
 import {computeRootHash} from '../lib/manifest';
 import {canonicalStringify, sha256Base64} from '../lib/serialize';
 import {readCommitIdMap, writeCommitIdMap, idToFileName} from '../lib/state';
-import {readRepoConfig, requireWitDir, writeRemoteRef, writeRemoteState} from '../lib/repo';
+import {
+  readRepoConfig,
+  requireWitDir,
+  resolveSuiSealPolicyId,
+  setSuiSealPolicyId,
+  writeRemoteRef,
+  writeRemoteState,
+  writeRepoConfig,
+} from '../lib/repo';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -38,9 +46,10 @@ export async function fetchAction(): Promise<void> {
     console.log(colors.yellow('Remote repository has no head; nothing to fetch.'));
     return;
   }
-  if (onchain.sealPolicyId && repoCfg.seal_policy_id !== onchain.sealPolicyId) {
-    repoCfg.seal_policy_id = onchain.sealPolicyId;
-    await fs.writeFile(path.join(witPath, 'config.json'), JSON.stringify(repoCfg, null, 2) + '\n', 'utf8');
+  const currentPolicyId = resolveSuiSealPolicyId(repoCfg);
+  if (onchain.sealPolicyId && onchain.sealPolicyId !== currentPolicyId) {
+    setSuiSealPolicyId(repoCfg, onchain.sealPolicyId);
+    await writeRepoConfig(witPath, repoCfg);
   }
 
   // Download manifest and commit for validation/cache

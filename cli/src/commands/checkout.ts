@@ -16,7 +16,7 @@ import { computeRootHash } from '../lib/manifest';
 import { WalrusService, resolveWalrusConfig } from '../lib/walrus';
 import { colors } from '../lib/ui';
 import { sha256Base64 } from '../lib/serialize';
-import { readRepoConfig } from '../lib/repo';
+import { readRepoConfig, resolveSuiSealPolicyId } from '../lib/repo';
 import { decryptWithSeal } from '../lib/seal';
 import { loadSigner } from '../lib/keys';
 
@@ -26,7 +26,8 @@ export async function checkoutAction(commitId: string): Promise<boolean> {
   const witPath = await requireWitDir();
   const repoCfg = await readRepoConfig(witPath);
   const commit = await readCommitById(witPath, commitId);
-  const files = await resolveFilesForCommit(witPath, commit, repoCfg.seal_policy_id || null);
+  const sealPolicyId = resolveSuiSealPolicyId(repoCfg);
+  const files = await resolveFilesForCommit(witPath, commit, sealPolicyId);
   if (!files) {
     // Friendly message already printed inside resolveFilesForCommit/ensureBlobsFromManifest
     // eslint-disable-next-line no-console

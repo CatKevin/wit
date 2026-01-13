@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
-export type ChainId = 'sui' | 'mantle-testnet';
+export type ChainId = 'sui' | 'mantle';
 
 export type ChainInfo = {
   id: ChainId;
@@ -11,7 +11,7 @@ export type ChainInfo = {
 
 const CHAINS: ChainInfo[] = [
   { id: 'sui', label: 'Sui' },
-  { id: 'mantle-testnet', label: 'Mantle Sepolia Testnet' },
+  { id: 'mantle', label: 'Mantle' },
 ];
 
 const DEFAULT_CHAIN: ChainId = 'sui';
@@ -49,7 +49,8 @@ function normalizeChainMaybe(input?: string | null): ChainId | null {
   if (!input) return null;
   const value = input.trim().toLowerCase();
   if (value === 'sui') return 'sui';
-  if (value === 'mantle-testnet') return 'mantle-testnet';
+  if (value === 'mantle') return 'mantle';
+  if (value === 'mantle-testnet') return 'mantle';
   return null;
 }
 

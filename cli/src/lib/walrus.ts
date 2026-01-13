@@ -22,6 +22,11 @@ type WalrusConfigShape = {
   aggregator?: string;
 };
 
+type WalrusRepoConfig = WalrusConfigShape & {
+  chain?: string;
+  chains?: Record<string, WalrusConfigShape | undefined>;
+};
+
 export type ResolvedWalrusConfig = {
   network: WalrusNetwork;
   relays: string[];
@@ -52,6 +57,15 @@ async function readJsonIfExists<T extends object>(file: string): Promise<T | nul
     if (err?.code === 'ENOENT') return null;
     throw err;
   }
+}
+
+function resolveRepoWalrusConfig(repoCfg: WalrusRepoConfig | null): WalrusConfigShape | null {
+  if (!repoCfg) return null;
+  const chainCfg = repoCfg.chains?.sui;
+  if (chainCfg && typeof chainCfg === 'object') {
+    return { ...repoCfg, ...chainCfg };
+  }
+  return repoCfg;
 }
 
 function normalizeNetwork(network?: string): WalrusNetwork {
@@ -100,7 +114,8 @@ function pickAggregatorHost(network: WalrusNetwork, repoCfg?: WalrusConfigShape 
 
 export async function resolveWalrusConfig(cwd = process.cwd()): Promise<ResolvedWalrusConfig> {
   const witDir = path.join(cwd, '.wit');
-  const repoCfg = await readJsonIfExists<WalrusConfigShape>(path.join(witDir, 'config.json'));
+  const repoCfgRaw = await readJsonIfExists<WalrusRepoConfig>(path.join(witDir, 'config.json'));
+  const repoCfg = resolveRepoWalrusConfig(repoCfgRaw);
   if (!repoCfg) {
     throw new Error('Not a wit repository (missing .wit/config.json). Run `wit init` first.');
   }

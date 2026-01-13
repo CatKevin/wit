@@ -1,6 +1,6 @@
 import { SuiClient } from '@mysten/sui/client';
 import { colors } from '../lib/ui';
-import { requireWitDir, readRepoConfig, writeRepoConfig } from '../lib/repo';
+import { requireWitDir, readRepoConfig, resolveSuiSealPolicyId, setSuiSealPolicyId, writeRepoConfig } from '../lib/repo';
 import { resolveWalrusConfig } from '../lib/walrus';
 import { loadSigner } from '../lib/keys';
 import { addCollaborator, fetchRepositoryState } from '../lib/suiRepo';
@@ -36,8 +36,9 @@ export async function inviteAction(address: string): Promise<void> {
     if (state.sealPolicyId) {
       whitelistId = state.sealPolicyId;
       // Update local config if missing
-      if (repoCfg.seal_policy_id !== whitelistId) {
-        repoCfg.seal_policy_id = whitelistId;
+      const currentPolicyId = resolveSuiSealPolicyId(repoCfg);
+      if (currentPolicyId !== whitelistId) {
+        setSuiSealPolicyId(repoCfg, whitelistId);
         await writeRepoConfig(witPath, repoCfg);
       }
     }

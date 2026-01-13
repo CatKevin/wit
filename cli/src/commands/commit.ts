@@ -11,15 +11,10 @@ import {
   readRef,
   writeCommitIdMap,
 } from '../lib/state';
-import {readRemoteRef} from '../lib/repo';
+import { readRemoteRef, readRepoConfig, resolveChainAuthor } from '../lib/repo';
 import {computeRootHash} from '../lib/manifest';
 import {colors} from '../lib/ui';
-
 type CommitExtras = {patch_id: null; tags: Record<string, string>};
-
-type Config = {
-  author?: string;
-};
 
 type CommitOptions = {message?: string};
 
@@ -40,8 +35,9 @@ export async function commitAction(opts: CommitOptions): Promise<void> {
     return;
   }
 
-  const config = await readConfig(witPath);
-  if (!config.author || config.author === 'unknown') {
+  const repoCfg = await readRepoConfig(witPath);
+  const author = resolveChainAuthor(repoCfg);
+  if (!author || author === 'unknown') {
     // eslint-disable-next-line no-console
     console.warn(colors.yellow('Warning: author is unknown. Set author in .wit/config.json or ~/.witconfig.'));
   }
@@ -57,7 +53,7 @@ export async function commitAction(opts: CommitOptions): Promise<void> {
       files: index,
     },
     parent,
-    author: config.author || 'unknown',
+    author: author || 'unknown',
     message,
     timestamp: Math.floor(Date.now() / 1000),
     extras: {patch_id: null, tags: {}},
@@ -124,19 +120,6 @@ async function requireWitDir(): Promise<string> {
     return dir;
   } catch {
     throw new Error('Not a wit repository (missing .wit). Run `wit init` first.');
-  }
-}
-
-async function readConfig(witPath: string): Promise<Config> {
-  const file = path.join(witPath, 'config.json');
-  try {
-    const raw = await fs.readFile(file, 'utf8');
-    return JSON.parse(raw) as Config;
-  } catch (err: any) {
-    if (err?.code === 'ENOENT') {
-      return {};
-    }
-    throw err;
   }
 }
 

@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { readActiveAddress } from '../lib/keys';
 import { readActiveChain } from '../lib/chain';
+import type { ChainConfig, RepoConfig } from '../lib/repo';
 
 type GlobalConfig = {
   author?: string;
@@ -10,45 +11,9 @@ type GlobalConfig = {
   relays?: string[];
 };
 
-type RepoConfig = {
-  repo_name: string;
-  repo_id: string | null;
-  chain: string;
-  chains: Record<string, ChainConfig>;
-  network: string;
-  relays: string[];
-  author: string;
-  key_alias: string;
-  seal_policy_id: string | null;
-  created_at: string;
-};
-
-type ChainConfig = {
-  author: string;
-  key_alias?: string;
-  network?: string;
-  relays?: string[];
-  seal_policy_id?: string | null;
-  storage_backend?: 'walrus' | 'ipfs';
-  rpc_url?: string;
-  chain_id?: number;
-  block_explorer?: string;
-  native_symbol?: string;
-  ipfs_gateway_url?: string;
-  lighthouse_upload_url?: string;
-  lighthouse_api_base?: string;
-};
-
 const DEFAULT_RELAYS = ['https://upload-relay.testnet.walrus.space'];
 const DEFAULT_NETWORK = 'testnet';
 const IGNORE_ENTRIES = ['.wit/', '~/.wit/keys', '.env.local', '*.pem', '.wit/seal'];
-const DEFAULT_MANTLE_RPC_URL = 'https://rpc.sepolia.mantle.xyz';
-const DEFAULT_MANTLE_CHAIN_ID = 5003;
-const DEFAULT_MANTLE_EXPLORER = 'https://sepolia.mantlescan.xyz';
-const DEFAULT_MANTLE_NATIVE_SYMBOL = 'MNT';
-const DEFAULT_LIGHTHOUSE_UPLOAD_URL = 'https://upload.lighthouse.storage/api/v0/add';
-const DEFAULT_LIGHTHOUSE_API_BASE = 'https://api.lighthouse.storage';
-const DEFAULT_LIGHTHOUSE_GATEWAY_URL = 'https://gateway.lighthouse.storage/ipfs/';
 
 type InitOptions = {
   private?: boolean;
@@ -70,10 +35,18 @@ export async function initAction(name?: string, options?: InitOptions): Promise<
 
   const wantsPrivate = options?.private || Boolean(options?.sealPolicy || options?.sealSecret);
   if (wantsPrivate) {
-    // We mark it as pending. The actual policy ID will be generated on-chain during 'wit push'.
-    repoCfg.seal_policy_id = 'pending';
-    // eslint-disable-next-line no-console
-    console.log('Initialized as PRIVATE repository. Encryption will be enabled on first push.');
+    if (activeChain === 'sui') {
+      // We mark it as pending. The actual policy ID will be generated on-chain during 'wit push'.
+      const chainCfg = repoCfg.chains?.[activeChain];
+      if (chainCfg) {
+        chainCfg.seal_policy_id = 'pending';
+      }
+      // eslint-disable-next-line no-console
+      console.log('Initialized as PRIVATE repository. Encryption will be enabled on first push.');
+    } else {
+      // eslint-disable-next-line no-console
+      console.log('Warning: --private is only supported on Sui for now; no seal policy was set.');
+    }
   }
 
   await writeConfigIfMissing(path.join(witDir, 'config.json'), repoCfg);
@@ -124,7 +97,7 @@ function buildRepoConfig(
   activeAddress: string | null | undefined,
   activeChain: string,
 ): RepoConfig {
-  const network = globalCfg.network || DEFAULT_NETWORK;
+  const network = resolveNetwork(activeChain, globalCfg);
   const relays = globalCfg.relays?.length ? globalCfg.relays : DEFAULT_RELAYS;
   const chainConfig = buildChainConfig(activeChain, globalCfg, activeAddress, network, relays);
   return {
@@ -133,10 +106,6 @@ function buildRepoConfig(
     chain: activeChain,
     chains: { [activeChain]: chainConfig },
     network,
-    relays,
-    author: chainConfig.author,
-    key_alias: chainConfig.key_alias || 'default',
-    seal_policy_id: null,
     created_at: new Date().toISOString(),
   };
 }
@@ -152,7 +121,6 @@ function buildChainConfig(
     return {
       author: activeAddress || globalCfg.author || 'unknown',
       key_alias: globalCfg.key_alias || 'default',
-      network,
       relays,
       seal_policy_id: null,
       storage_backend: 'walrus',
@@ -161,14 +129,11 @@ function buildChainConfig(
   return {
     author: 'unknown',
     storage_backend: 'ipfs',
-    rpc_url: DEFAULT_MANTLE_RPC_URL,
-    chain_id: DEFAULT_MANTLE_CHAIN_ID,
-    block_explorer: DEFAULT_MANTLE_EXPLORER,
-    native_symbol: DEFAULT_MANTLE_NATIVE_SYMBOL,
-    ipfs_gateway_url: DEFAULT_LIGHTHOUSE_GATEWAY_URL,
-    lighthouse_upload_url: DEFAULT_LIGHTHOUSE_UPLOAD_URL,
-    lighthouse_api_base: DEFAULT_LIGHTHOUSE_API_BASE,
   };
+}
+
+function resolveNetwork(activeChain: string, globalCfg: GlobalConfig): string {
+  return globalCfg.network || DEFAULT_NETWORK;
 }
 
 async function writeConfigIfMissing(file: string, cfg: RepoConfig): Promise<void> {

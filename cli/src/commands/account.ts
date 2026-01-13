@@ -103,7 +103,9 @@ async function maybeUpdateRepoAuthor(address: string): Promise<void> {
       return;
     }
     if (!cfg.author || cfg.author === 'unknown') {
-      cfg.author = address;
+      if (Object.prototype.hasOwnProperty.call(cfg, 'author')) {
+        cfg.author = address;
+      }
       if (cfg.chains?.sui && typeof cfg.chains.sui === 'object') {
         cfg.chains.sui.author = address;
       }
