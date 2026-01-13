@@ -7,6 +7,7 @@ type UploadOptions = {
   progress?: boolean;
   retries?: string | number;
   retryDelay?: string | number;
+  cache?: boolean;
 };
 
 export async function lighthouseUploadAction(filePath: string, opts: UploadOptions): Promise<void> {
@@ -32,6 +33,7 @@ export async function lighthouseUploadAction(filePath: string, opts: UploadOptio
       apiKey,
       cidVersion,
       onProgress: progress,
+      useCache: opts.cache !== false,
       retries,
       retryDelayMs: retryDelay,
       onRetry: (attempt, err, delayMs) => {
@@ -44,10 +46,10 @@ export async function lighthouseUploadAction(filePath: string, opts: UploadOptio
         );
       },
     });
-    if (progress) progress(100);
+    if (progress && !result.fromCache) progress(100);
 
     // eslint-disable-next-line no-console
-    console.log(colors.green('Uploaded to Lighthouse.'));
+    console.log(colors.green(result.fromCache ? 'Cache hit. Using existing Lighthouse CID.' : 'Uploaded to Lighthouse.'));
     // eslint-disable-next-line no-console
     console.log(`  cid:  ${colors.hash(result.cid)}`);
     // eslint-disable-next-line no-console

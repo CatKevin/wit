@@ -1,4 +1,6 @@
+import crypto from 'crypto';
 import fs from 'fs';
+import fsp from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
@@ -9,6 +11,7 @@ export type LighthouseUploadOptions = {
   apiKey?: string;
   cidVersion?: number;
   onProgress?: (progress: number) => void;
+  useCache?: boolean;
   retries?: number;
   retryDelayMs?: number;
   onRetry?: (attempt: number, err: Error, delayMs: number) => void;
@@ -34,6 +37,7 @@ export type LighthouseUploadResult = {
   name?: string;
   size?: string;
   raw: unknown;
+  fromCache?: boolean;
 };
 
 export type LighthousePinOptions = {
@@ -49,6 +53,19 @@ export type LighthousePinResult = {
   cid: string;
   pinUrl: string;
   raw: unknown;
+};
+
+type LighthouseUploadCacheEntry = {
+  cid: string;
+  size: number;
+  cidVersion: number;
+  source: 'file' | 'text' | 'buffer';
+  createdAt: string;
+};
+
+type LighthouseUploadCache = {
+  version: 1;
+  entries: Record<string, LighthouseUploadCacheEntry>;
 };
 
 type LighthouseGlobalConfig = {
@@ -71,6 +88,7 @@ let globalConfigLoaded = false;
 let globalConfigCache: LighthouseGlobalConfig = {};
 
 const DEFAULT_LIGHTHOUSE_PIN_URL = 'https://api.lighthouse.storage/api/lighthouse/pin';
+const DEFAULT_CACHE_FILE = 'lighthouse-uploads.json';
 
 export function resolveLighthouseApiKey(): string | null {
   loadDotEnvOnce();
@@ -133,11 +151,45 @@ export async function uploadFileToLighthouse(
 ): Promise<LighthouseUploadResult> {
   const apiKey = opts.apiKey || requireLighthouseApiKey();
   const cidVersion = normalizeCidVersion(opts.cidVersion);
+  let cacheKey: string | null = null;
+  let cache: LighthouseUploadCache | null = null;
+  let fileSize: number | null = null;
+  const useCache = opts.useCache !== false;
+  if (useCache) {
+    const stat = await fsp.stat(filePath);
+    if (stat.isFile()) {
+      fileSize = stat.size;
+      const sha256 = await computeFileSha256(filePath);
+      cacheKey = buildUploadCacheKey(sha256, cidVersion);
+      cache = await readUploadCache();
+      const hit = cache.entries[cacheKey];
+      if (hit?.cid) {
+        return {
+          cid: hit.cid,
+          name: path.basename(filePath),
+          size: String(hit.size),
+          raw: { cache: true, key: cacheKey },
+          fromCache: true,
+        };
+      }
+    }
+  }
+
   const response = await uploadWithRetry(
     () => lighthouse.upload(filePath, apiKey, cidVersion, mapProgress(opts.onProgress)),
     opts,
   );
-  return mapUploadResponse(response);
+  const result = mapUploadResponse(response);
+  if (useCache && cacheKey) {
+    await persistUploadCache(cacheKey, {
+      cid: result.cid,
+      size: fileSize ?? parseSize(result.size),
+      cidVersion,
+      source: 'file',
+      createdAt: new Date().toISOString(),
+    }, cache);
+  }
+  return result;
 }
 
 export async function uploadTextToLighthouse(
@@ -147,8 +199,38 @@ export async function uploadTextToLighthouse(
 ): Promise<LighthouseUploadResult> {
   const apiKey = opts.apiKey || requireLighthouseApiKey();
   const cidVersion = normalizeCidVersion(opts.cidVersion);
+  const useCache = opts.useCache !== false;
+  let cacheKey: string | null = null;
+  let cache: LighthouseUploadCache | null = null;
+  const size = Buffer.byteLength(text, 'utf8');
+  if (useCache) {
+    const sha256 = computeBufferSha256(Buffer.from(text));
+    cacheKey = buildUploadCacheKey(sha256, cidVersion);
+    cache = await readUploadCache();
+    const hit = cache.entries[cacheKey];
+    if (hit?.cid) {
+      return {
+        cid: hit.cid,
+        name,
+        size: String(hit.size),
+        raw: { cache: true, key: cacheKey },
+        fromCache: true,
+      };
+    }
+  }
+
   const response = await uploadWithRetry(() => lighthouse.uploadText(text, apiKey, name, cidVersion), opts);
-  return mapUploadResponse(response);
+  const result = mapUploadResponse(response);
+  if (useCache && cacheKey) {
+    await persistUploadCache(cacheKey, {
+      cid: result.cid,
+      size,
+      cidVersion,
+      source: 'text',
+      createdAt: new Date().toISOString(),
+    }, cache);
+  }
+  return result;
 }
 
 export async function uploadBufferToLighthouse(
@@ -157,8 +239,36 @@ export async function uploadBufferToLighthouse(
 ): Promise<LighthouseUploadResult> {
   const apiKey = opts.apiKey || requireLighthouseApiKey();
   const cidVersion = normalizeCidVersion(opts.cidVersion);
+  const useCache = opts.useCache !== false;
+  let cacheKey: string | null = null;
+  let cache: LighthouseUploadCache | null = null;
+  if (useCache) {
+    const sha256 = computeBufferSha256(buffer);
+    cacheKey = buildUploadCacheKey(sha256, cidVersion);
+    cache = await readUploadCache();
+    const hit = cache.entries[cacheKey];
+    if (hit?.cid) {
+      return {
+        cid: hit.cid,
+        size: String(hit.size),
+        raw: { cache: true, key: cacheKey },
+        fromCache: true,
+      };
+    }
+  }
+
   const response = await uploadWithRetry(() => lighthouse.uploadBuffer(buffer, apiKey, cidVersion), opts);
-  return mapUploadResponse(response);
+  const result = mapUploadResponse(response);
+  if (useCache && cacheKey) {
+    await persistUploadCache(cacheKey, {
+      cid: result.cid,
+      size: buffer.length,
+      cidVersion,
+      source: 'buffer',
+      createdAt: new Date().toISOString(),
+    }, cache);
+  }
+  return result;
 }
 
 export async function pinCidWithLighthouse(
@@ -237,6 +347,7 @@ function mapUploadResponse(response: any): LighthouseUploadResult {
     name: data?.Name ?? data?.name,
     size: data?.Size ?? data?.size,
     raw: data,
+    fromCache: false,
   };
 }
 
@@ -250,6 +361,94 @@ function extractCid(data: any): string | null {
   if (typeof data.CID === 'string') return data.CID;
   if (typeof data.IpfsHash === 'string') return data.IpfsHash;
   return null;
+}
+
+function buildUploadCacheKey(sha256: string, cidVersion: number): string {
+  return `${sha256}:v${cidVersion}`;
+}
+
+async function readUploadCache(): Promise<LighthouseUploadCache> {
+  const cachePath = resolveUploadCachePath();
+  try {
+    const raw = await fsp.readFile(cachePath, 'utf8');
+    const parsed = JSON.parse(raw) as LighthouseUploadCache;
+    if (parsed && parsed.version === 1 && parsed.entries && typeof parsed.entries === 'object') {
+      return parsed;
+    }
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') {
+      return { version: 1, entries: {} };
+    }
+    // eslint-disable-next-line no-console
+    console.warn(`Warning: could not read Lighthouse cache ${cachePath}: ${err.message}`);
+  }
+  return { version: 1, entries: {} };
+}
+
+async function persistUploadCache(
+  cacheKey: string,
+  entry: LighthouseUploadCacheEntry,
+  cache?: LighthouseUploadCache | null,
+): Promise<void> {
+  try {
+    const resolved = cache ?? (await readUploadCache());
+    resolved.entries[cacheKey] = entry;
+    await writeUploadCache(resolved);
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.warn(`Warning: could not update Lighthouse cache: ${err?.message || err}`);
+  }
+}
+
+async function writeUploadCache(cache: LighthouseUploadCache): Promise<void> {
+  const cachePath = resolveUploadCachePath();
+  await fsp.mkdir(path.dirname(cachePath), { recursive: true });
+  await fsp.writeFile(cachePath, JSON.stringify(cache, null, 2) + '\n', 'utf8');
+}
+
+function resolveUploadCachePath(): string {
+  const witDir = findWitDir(process.cwd());
+  if (witDir) {
+    return path.join(witDir, 'cache', DEFAULT_CACHE_FILE);
+  }
+  return path.join(os.homedir(), '.wit', 'cache', DEFAULT_CACHE_FILE);
+}
+
+function findWitDir(startDir: string): string | null {
+  let current = path.resolve(startDir);
+  while (true) {
+    const candidate = path.join(current, '.wit');
+    if (fs.existsSync(candidate)) {
+      try {
+        if (fs.statSync(candidate).isDirectory()) return candidate;
+      } catch {
+        // ignore stat errors
+      }
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+async function computeFileSha256(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+function computeBufferSha256(buffer: Uint8Array): string {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+function parseSize(value?: string): number {
+  if (!value) return 0;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 function loadDotEnvOnce(): void {

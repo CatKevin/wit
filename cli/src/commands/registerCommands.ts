@@ -255,7 +255,8 @@ export function registerCommands(program: Command): void {
     .option('--progress', 'show upload progress')
     .option('--retries <n>', 'retry attempts (default 3)', (v) => parseInt(v, 10), 3)
     .option('--retry-delay <ms>', 'base retry delay in ms (default 1000)', (v) => parseInt(v, 10), 1000)
-    .action((file: string, opts: { cidVersion?: number; progress?: boolean; retries?: number; retryDelay?: number }) =>
+    .option('--no-cache', 'disable local upload cache')
+    .action((file: string, opts: { cidVersion?: number; progress?: boolean; retries?: number; retryDelay?: number; cache?: boolean }) =>
       lighthouseUploadAction(file, opts));
 
   program
