@@ -10,7 +10,7 @@ import { cloneAction } from './clone';
 import { fetchAction } from './fetch';
 import { pullAction } from './pull';
 import { inviteAction } from './invite';
-import { colorsEnabled, setColorsEnabled } from '../lib/ui';
+import { colors, colorsEnabled, setColorsEnabled } from '../lib/ui';
 import { accountBalanceAction, accountGenerateAction, accountListAction, accountUseAction } from './account';
 import { pushBlobAction, pullBlobAction } from './walrusBlob';
 import {
@@ -25,6 +25,44 @@ import { listAction } from './list';
 import { transferAction } from './transfer';
 import { removeUserAction } from './removeUser';
 import { chainCurrentAction, chainListAction, chainUseAction } from './chain';
+import { formatChainMismatchMessage } from '../lib/chain';
+import { getRepoChainMismatch, readRepoConfig, requireWitDir } from '../lib/repo';
+
+function shouldSkipChainCheck(cmd: Command): boolean {
+  const parent = cmd.parent;
+  if (!parent) return false;
+  if (parent.name() !== 'chain') return false;
+  const name = cmd.name();
+  return name === 'list' || name === 'use' || name === 'current';
+}
+
+async function enforceRepoChain(cmd: Command): Promise<void> {
+  if (shouldSkipChainCheck(cmd)) return;
+  let witPath: string;
+  try {
+    witPath = await requireWitDir();
+  } catch (err: any) {
+    if (err?.message?.includes('Not a wit repository')) return;
+    throw err;
+  }
+  let repoCfg;
+  try {
+    repoCfg = await readRepoConfig(witPath);
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return;
+    throw err;
+  }
+  const mismatch = await getRepoChainMismatch(repoCfg);
+  if (!mismatch) return;
+  if ('error' in mismatch) {
+    // eslint-disable-next-line no-console
+    console.error(colors.red(mismatch.error));
+    process.exit(1);
+  }
+  // eslint-disable-next-line no-console
+  console.error(colors.red(formatChainMismatchMessage(mismatch.repoChain, mismatch.activeChain)));
+  process.exit(1);
+}
 
 export function registerCommands(program: Command): void {
   // Global options (propagate to subcommands)
@@ -212,7 +250,7 @@ export function registerCommands(program: Command): void {
     .description('Show SUI/WAL balance for the address (defaults to active)')
     .action((address?: string) => accountBalanceAction(address));
 
-  program.hook('preAction', (cmd) => {
+  program.hook('preAction', async (cmd) => {
     const opts = (cmd as any).optsWithGlobals ? (cmd as any).optsWithGlobals() : program.opts();
     const envDefault =
       process.env.WIT_NO_COLOR === undefined &&
@@ -223,5 +261,6 @@ export function registerCommands(program: Command): void {
     if (!desired && colorsEnabled()) {
       setColorsEnabled(false);
     }
+    await enforceRepoChain(cmd);
   });
 }

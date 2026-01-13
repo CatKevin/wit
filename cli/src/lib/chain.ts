@@ -45,6 +45,13 @@ export function normalizeChain(input?: string | null): ChainId {
   return normalized;
 }
 
+export function formatChainMismatchMessage(repoChain: ChainId, activeChain: ChainId): string {
+  return (
+    `Repository chain is ${repoChain}, but active chain is ${activeChain}. ` +
+    `Run \`wit chain use ${repoChain}\` and retry.`
+  );
+}
+
 function normalizeChainMaybe(input?: string | null): ChainId | null {
   if (!input) return null;
   const value = input.trim().toLowerCase();

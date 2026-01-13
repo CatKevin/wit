@@ -12,7 +12,7 @@ import { idToFileName, writeCommitIdMap, readCommitIdMap } from '../lib/state';
 import { setSuiSealPolicyId, writeRemoteRef, writeRemoteState, writeRepoConfig } from '../lib/repo';
 import { decryptWithSeal } from '../lib/seal';
 import { loadSigner } from '../lib/keys';
-import { readActiveChain } from '../lib/chain';
+import { formatChainMismatchMessage, readActiveChain, type ChainId } from '../lib/chain';
 
 type RemoteCommit = {
   tree: { root_hash: string; manifest_id: string | null; quilt_id: string | null };
@@ -29,6 +29,14 @@ const DEFAULT_NETWORK = 'testnet';
 export async function cloneAction(repoId: string): Promise<void> {
   if (!repoId) {
     throw new Error('Usage: wit clone <repo_id>');
+  }
+  const activeChain = await readActiveChain();
+  const repoChain = inferRepoChain(repoId, activeChain);
+  if (repoChain !== activeChain) {
+    // eslint-disable-next-line no-console
+    console.error(colors.red(formatChainMismatchMessage(repoChain, activeChain)));
+    process.exitCode = 1;
+    return;
   }
   // eslint-disable-next-line no-console
   console.log(colors.header('Starting clone...'));
@@ -250,7 +258,7 @@ async function ensureLayout(cwd: string, repoId: string): Promise<string> {
   return witPath;
 }
 
-function inferRepoChain(repoId: string, fallback: string): string {
+function inferRepoChain(repoId: string, fallback: ChainId): ChainId {
   if (repoId.startsWith('mantle:')) return 'mantle';
   if (repoId.startsWith('sui:')) return 'sui';
   return fallback;

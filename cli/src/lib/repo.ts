@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { normalizeChain, readActiveChain, type ChainId } from './chain';
 
 export type RepoConfig = {
   repo_name: string;
@@ -79,6 +80,23 @@ export async function readRepoConfig(witPath: string): Promise<RepoConfig> {
 export async function writeRepoConfig(witPath: string, cfg: RepoConfig): Promise<void> {
   const file = path.join(witPath, 'config.json');
   await fs.writeFile(file, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+}
+
+export type ChainMismatch = { repoChain: ChainId; activeChain: ChainId };
+export type ChainMismatchResult = ChainMismatch | { error: string } | null;
+
+export async function getRepoChainMismatch(cfg: RepoConfig): Promise<ChainMismatchResult> {
+  let repoChain: ChainId;
+  try {
+    repoChain = normalizeChain(cfg.chain ?? 'sui');
+  } catch (err: any) {
+    return { error: err?.message || 'Unknown chain in repository config.' };
+  }
+  const activeChain = await readActiveChain();
+  if (repoChain !== activeChain) {
+    return { repoChain, activeChain };
+  }
+  return null;
 }
 
 export function resolveChainConfig(cfg: RepoConfig, chain?: string | null): ChainConfig | null {
