@@ -252,7 +252,10 @@ export function registerCommands(program: Command): void {
     .description('Upload a file to Lighthouse and print CID')
     .option('--cid-version <n>', 'CID version (default 1)', (v) => parseInt(v, 10), 1)
     .option('--progress', 'show upload progress')
-    .action((file: string, opts: { cidVersion?: number; progress?: boolean }) => lighthouseUploadAction(file, opts));
+    .option('--retries <n>', 'retry attempts (default 3)', (v) => parseInt(v, 10), 3)
+    .option('--retry-delay <ms>', 'base retry delay in ms (default 1000)', (v) => parseInt(v, 10), 1000)
+    .action((file: string, opts: { cidVersion?: number; progress?: boolean; retries?: number; retryDelay?: number }) =>
+      lighthouseUploadAction(file, opts));
 
   program
     .command('lighthouse-download <cid>')

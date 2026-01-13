@@ -9,6 +9,9 @@ export type LighthouseUploadOptions = {
   apiKey?: string;
   cidVersion?: number;
   onProgress?: (progress: number) => void;
+  retries?: number;
+  retryDelayMs?: number;
+  onRetry?: (attempt: number, err: Error, delayMs: number) => void;
 };
 
 export type LighthouseGatewayOptions = {
@@ -113,7 +116,10 @@ export async function uploadFileToLighthouse(
 ): Promise<LighthouseUploadResult> {
   const apiKey = opts.apiKey || requireLighthouseApiKey();
   const cidVersion = normalizeCidVersion(opts.cidVersion);
-  const response = await lighthouse.upload(filePath, apiKey, cidVersion, mapProgress(opts.onProgress));
+  const response = await uploadWithRetry(
+    () => lighthouse.upload(filePath, apiKey, cidVersion, mapProgress(opts.onProgress)),
+    opts,
+  );
   return mapUploadResponse(response);
 }
 
@@ -124,7 +130,7 @@ export async function uploadTextToLighthouse(
 ): Promise<LighthouseUploadResult> {
   const apiKey = opts.apiKey || requireLighthouseApiKey();
   const cidVersion = normalizeCidVersion(opts.cidVersion);
-  const response = await lighthouse.uploadText(text, apiKey, name, cidVersion);
+  const response = await uploadWithRetry(() => lighthouse.uploadText(text, apiKey, name, cidVersion), opts);
   return mapUploadResponse(response);
 }
 
@@ -134,7 +140,7 @@ export async function uploadBufferToLighthouse(
 ): Promise<LighthouseUploadResult> {
   const apiKey = opts.apiKey || requireLighthouseApiKey();
   const cidVersion = normalizeCidVersion(opts.cidVersion);
-  const response = await lighthouse.uploadBuffer(buffer, apiKey, cidVersion);
+  const response = await uploadWithRetry(() => lighthouse.uploadBuffer(buffer, apiKey, cidVersion), opts);
   return mapUploadResponse(response);
 }
 
@@ -225,6 +231,36 @@ type RetryOptions = {
   timeoutMs?: number;
 };
 
+type UploadRetryOptions = {
+  retries?: number;
+  retryDelayMs?: number;
+  onRetry?: (attempt: number, err: Error, delayMs: number) => void;
+};
+
+async function uploadWithRetry<T>(fn: () => Promise<T>, opts: UploadRetryOptions): Promise<T> {
+  const retries = normalizeRetryCount(opts.retries, 3);
+  const retryDelayMs = normalizeRetryDelay(opts.retryDelayMs, 1000);
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt >= retries || !shouldRetryUploadError(lastError)) {
+        break;
+      }
+      const delay = computeBackoff(retryDelayMs, attempt);
+      if (opts.onRetry) {
+        opts.onRetry(attempt + 1, lastError, delay);
+      }
+      await sleep(delay);
+    }
+  }
+
+  throw lastError ?? new Error('Lighthouse upload failed.');
+}
+
 async function fetchWithRetry(url: string, opts: RetryOptions): Promise<Uint8Array> {
   const retries = opts.retries ?? 3;
   const retryDelayMs = opts.retryDelayMs ?? 500;
@@ -271,6 +307,36 @@ function shouldRetryError(err: Error): boolean {
   return false;
 }
 
+function shouldRetryUploadError(err: Error): boolean {
+  const status = extractStatusCode(err);
+  if (status !== null) {
+    if (status >= 500) return true;
+    if (status === 429 || status === 408) return true;
+    return false;
+  }
+  const message = err.message?.toLowerCase() || '';
+  if (!message) return true;
+  if (message.includes('timed out') || message.includes('timeout')) return true;
+  if (message.includes('network error')) return true;
+  if (message.includes('socket hang up')) return true;
+  if (message.includes('econnreset')) return true;
+  if (message.includes('econnrefused')) return true;
+  if (message.includes('enotfound')) return true;
+  if (message.includes('eai_again')) return true;
+  if (message.includes('epipe')) return true;
+  return false;
+}
+
+function extractStatusCode(err: Error): number | null {
+  const direct = (err as any)?.status;
+  if (typeof direct === 'number' && Number.isFinite(direct)) return direct;
+  const message = err.message || '';
+  const match = message.match(/status(?: code)?\s*(\d{3})/i);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function computeBackoff(baseMs: number, attempt: number): number {
   const jitter = 0.7 + Math.random() * 0.6;
   return Math.round(baseMs * Math.pow(2, attempt) * jitter);
@@ -278,6 +344,16 @@ function computeBackoff(baseMs: number, attempt: number): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeRetryCount(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
+  return Math.max(0, Math.floor(value));
+}
+
+function normalizeRetryDelay(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
+  return Math.max(0, Math.floor(value));
 }
 
 async function verifyCidBytes(cid: string, bytes: Uint8Array, format: 'raw' | 'car'): Promise<void> {

@@ -5,6 +5,8 @@ import { resolveLighthouseApiKey, uploadFileToLighthouse } from '../lib/lighthou
 type UploadOptions = {
   cidVersion?: string | number;
   progress?: boolean;
+  retries?: string | number;
+  retryDelay?: string | number;
 };
 
 export async function lighthouseUploadAction(filePath: string, opts: UploadOptions): Promise<void> {
@@ -20,10 +22,28 @@ export async function lighthouseUploadAction(filePath: string, opts: UploadOptio
     }
 
     const cidVersion = parseCidVersion(opts.cidVersion);
+    const retries = parseOptionalNumber(opts.retries, 3);
+    const retryDelay = parseOptionalNumber(opts.retryDelay, 1000);
     const absPath = path.resolve(filePath);
     const progress = opts.progress ? createProgressReporter() : undefined;
 
-    const result = await uploadFileToLighthouse(absPath, { apiKey, cidVersion, onProgress: progress });
+    const totalAttempts = retries + 1;
+    const result = await uploadFileToLighthouse(absPath, {
+      apiKey,
+      cidVersion,
+      onProgress: progress,
+      retries,
+      retryDelayMs: retryDelay,
+      onRetry: (attempt, err, delayMs) => {
+        const message = err?.message || String(err);
+        // eslint-disable-next-line no-console
+        console.warn(
+          colors.yellow(
+            `Upload attempt ${attempt}/${totalAttempts} failed: ${message}. Retrying in ${delayMs}ms...`,
+          ),
+        );
+      },
+    });
     if (progress) progress(100);
 
     // eslint-disable-next-line no-console
@@ -46,6 +66,13 @@ function parseCidVersion(value?: string | number): number {
   if (typeof value === 'number') return Number.isNaN(value) ? 1 : value;
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? 1 : parsed;
+}
+
+function parseOptionalNumber(value: string | number | undefined, fallback: number): number {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'number') return Number.isNaN(value) ? fallback : value;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
 }
 
 function createProgressReporter(): (progress: number) => void {
