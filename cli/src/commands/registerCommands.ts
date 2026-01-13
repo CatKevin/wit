@@ -27,6 +27,7 @@ import { removeUserAction } from './removeUser';
 import { chainCurrentAction, chainListAction, chainUseAction } from './chain';
 import { formatChainMismatchMessage } from '../lib/chain';
 import { getRepoChainMismatch, readRepoConfig, requireWitDir } from '../lib/repo';
+import { carPackAction, carUnpackAction } from './ipfsCar';
 
 function shouldSkipChainCheck(cmd: Command): boolean {
   const parent = cmd.parent;
@@ -223,6 +224,19 @@ export function registerCommands(program: Command): void {
     .command('pull-quilt-legacy <blob_id> <out_dir>')
     .description('Download legacy archive and restore files (hash/root_hash verified)')
     .action((blobId: string, outDir: string) => pullQuiltLegacyAction(blobId, outDir));
+
+  program
+    .command('car-pack <input>')
+    .description('Pack a directory or file into a CAR snapshot')
+    .option('-o, --out <path>', 'output CAR file path')
+    .option('--no-wrap', 'do not wrap input with a directory')
+    .option('--root-out <path>', 'write root CID to a file')
+    .action((input: string, opts: { out?: string; wrap?: boolean; rootOut?: string }) => carPackAction(input, opts));
+
+  program
+    .command('car-unpack <car_file> <out_dir>')
+    .description('Unpack a CAR snapshot to a directory')
+    .action((carFile: string, outDir: string) => carUnpackAction(carFile, outDir));
 
   program
     .command('list')
