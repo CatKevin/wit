@@ -8,6 +8,7 @@ import {readHeadRefPath, readRef, readCommitById} from '../lib/state';
 import {buildIgnore, computeFileMeta, readIndex, walkFiles, pathToPosix} from '../lib/fs';
 import {ManifestSchema} from '../lib/schema';
 import {computeRootHash} from '../lib/manifest';
+import {canonicalStringify} from '../lib/serialize';
 import {WalrusService} from '../lib/walrus';
 
 export async function pullAction(): Promise<void> {
@@ -164,5 +165,5 @@ function manifestIdToFile(id: string): string {
 }
 
 function canonicalManifest(m: any): string {
-  return JSON.stringify(m, null, 2) + '\n';
+  return canonicalStringify(m);
 }

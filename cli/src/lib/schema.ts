@@ -20,20 +20,31 @@ const fileMeta = z.object({
     .optional(),
 });
 
-export const ManifestSchema = z.object({
-  version: z.literal(1),
-  quilt_id: z.string().min(1),
-  root_hash: z.string().min(1),
-  files: z.record(fileMeta),
-});
+export const ManifestSchema = z
+  .object({
+    version: z.literal(1),
+    quilt_id: z.string().min(1).optional(),
+    snapshot_cid: z.string().min(1).optional(),
+    root_hash: z.string().min(1),
+    files: z.record(fileMeta),
+  })
+  .refine((manifest) => Boolean(manifest.quilt_id || manifest.snapshot_cid), {
+    message: 'Manifest must include quilt_id or snapshot_cid',
+  });
 
 export const CommitSchema = z.object({
-  tree: z.object({
-    quilt_id: z.string().min(1).nullable(),
-    manifest_id: z.string().min(1).nullable(),
-    root_hash: z.string().min(1),
-    files: z.record(fileMeta).optional(),
-  }),
+  tree: z
+    .object({
+      quilt_id: z.string().min(1).nullable().optional(),
+      manifest_id: z.string().min(1).nullable().optional(),
+      manifest_cid: z.string().min(1).nullable().optional(),
+      snapshot_cid: z.string().min(1).nullable().optional(),
+      root_hash: z.string().min(1),
+      files: z.record(fileMeta).optional(),
+    })
+    .refine((tree) => Boolean(tree.files || tree.manifest_id || tree.manifest_cid), {
+      message: 'Commit tree must include files or manifest id',
+    }),
   parent: z.string().min(1).nullable(),
   author: z.string().min(1),
   message: z.string().min(1),

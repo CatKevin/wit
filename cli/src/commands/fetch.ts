@@ -19,7 +19,13 @@ import fs from 'fs/promises';
 import path from 'path';
 
 type RemoteCommit = {
-  tree: {root_hash: string; manifest_id: string | null; quilt_id: string | null};
+  tree: {
+    root_hash: string;
+    manifest_id?: string | null;
+    manifest_cid?: string | null;
+    quilt_id?: string | null;
+    snapshot_cid?: string | null;
+  };
   parent: string | null;
   author: string;
   message: string;
@@ -103,7 +109,8 @@ async function cacheJson(filePath: string, content: string): Promise<void> {
 
 function parseRemoteCommit(buf: Buffer): RemoteCommit {
   const parsed = JSON.parse(buf.toString('utf8')) as RemoteCommit;
-  if (!parsed?.tree?.root_hash || !parsed?.tree?.manifest_id) {
+  const hasManifestRef = Boolean(parsed?.tree?.manifest_id || parsed?.tree?.manifest_cid);
+  if (!parsed?.tree?.root_hash || !hasManifestRef) {
     throw new Error('Invalid remote commit object');
   }
   return parsed;
