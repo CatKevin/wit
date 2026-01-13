@@ -22,16 +22,18 @@
     "prepublishOnly": "npm run build && npm run test:smoke"
   },
   "dependencies": {
+    "@lighthouse-web3/sdk": "^0.4.3",
     "@mysten/seal": "^0.9.4",
     "@mysten/sui": "^1.45.0",
     "@mysten/walrus": "^0.8.4",
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
     "diff": "^5.2.0",
+    "dotenv": "^17.2.3",
     "ethers": "6.16.0",
     "ignore": "^5.3.1",
-    "ipfs-car": "3.1.0",
     "ink": "^4.4.1",
+    "ipfs-car": "3.1.0",
     "isbinaryfile": "^5.0.2",
     "react": "^18.2.0",
     "zod": "^3.23.8"

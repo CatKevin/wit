@@ -28,6 +28,7 @@ import { chainCurrentAction, chainListAction, chainUseAction } from './chain';
 import { formatChainMismatchMessage } from '../lib/chain';
 import { getRepoChainMismatch, readRepoConfig, requireWitDir } from '../lib/repo';
 import { carPackAction, carUnpackAction } from './ipfsCar';
+import { lighthouseUploadAction } from './lighthouse';
 
 function shouldSkipChainCheck(cmd: Command): boolean {
   const parent = cmd.parent;
@@ -237,6 +238,13 @@ export function registerCommands(program: Command): void {
     .command('car-unpack <car_file> <out_dir>')
     .description('Unpack a CAR snapshot to a directory')
     .action((carFile: string, outDir: string) => carUnpackAction(carFile, outDir));
+
+  program
+    .command('lighthouse-upload <file>')
+    .description('Upload a file to Lighthouse and print CID')
+    .option('--cid-version <n>', 'CID version (default 1)', (v) => parseInt(v, 10), 1)
+    .option('--progress', 'show upload progress')
+    .action((file: string, opts: { cidVersion?: number; progress?: boolean }) => lighthouseUploadAction(file, opts));
 
   program
     .command('list')

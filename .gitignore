@@ -1,3 +1,4 @@
 cli/node_modules/
 cli/dist/
+cli/.env
 contracts/move/build
