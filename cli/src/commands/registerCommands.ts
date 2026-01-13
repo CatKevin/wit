@@ -24,6 +24,7 @@ import {
 import { listAction } from './list';
 import { transferAction } from './transfer';
 import { removeUserAction } from './removeUser';
+import { chainListAction, chainUseAction } from './chain';
 
 export function registerCommands(program: Command): void {
   // Global options (propagate to subcommands)
@@ -191,6 +192,10 @@ export function registerCommands(program: Command): void {
     .option('--owned', 'Show only owned repositories')
     .option('--collaborated', 'Show only collaborated repositories')
     .action(listAction);
+
+  const chain = program.command('chain').description('Manage active chain');
+  chain.command('list').description('List supported chains').action(chainListAction);
+  chain.command('use <chain>').description('Set active chain').action(chainUseAction);
 
   const account = program.command('account').description('Manage wit accounts (keys, active address)');
   account.command('list').description('List locally stored accounts (keys) and show active').action(accountListAction);
