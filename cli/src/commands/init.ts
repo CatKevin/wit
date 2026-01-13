@@ -31,7 +31,14 @@ export async function initAction(name?: string, options?: InitOptions): Promise<
 
   const globalCfg = await readGlobalConfig();
   const activeChain = await readActiveChain();
-  const activeAddress = activeChain === 'mantle' ? await readActiveEvmAddress() : await readActiveAddress();
+  let activeAddress: string | null = null;
+  if (activeChain === 'mantle') {
+    activeAddress = await readActiveEvmAddress();
+  } else if (activeChain === 'sui') {
+    activeAddress = await readActiveAddress();
+  } else {
+    throw new Error(`Unsupported chain "${activeChain}".`);
+  }
   const repoCfg = buildRepoConfig(repoName, globalCfg, activeAddress, activeChain);
 
   const wantsPrivate = options?.private || Boolean(options?.sealPolicy || options?.sealSecret);
@@ -126,11 +133,13 @@ function buildChainConfig(
       seal_policy_id: null,
       storage_backend: 'walrus',
     };
+  } else if (activeChain === 'mantle') {
+    return {
+      author: activeAddress || 'unknown',
+      storage_backend: 'ipfs',
+    };
   }
-  return {
-    author: activeAddress || 'unknown',
-    storage_backend: 'ipfs',
-  };
+  throw new Error(`Unsupported chain "${activeChain}".`);
 }
 
 function resolveNetwork(activeChain: string, globalCfg: GlobalConfig): string {

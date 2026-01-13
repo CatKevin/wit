@@ -266,7 +266,8 @@ function inferRepoChain(repoId: string, fallback: ChainId): ChainId {
 
 function inferNetwork(repoChain: string): string {
   if (repoChain === 'mantle') return 'testnet';
-  return DEFAULT_NETWORK;
+  else if (repoChain === 'sui') return DEFAULT_NETWORK;
+  throw new Error(`Unsupported chain "${repoChain}".`);
 }
 
 function buildChainConfig(repoChain: string): {
@@ -286,11 +287,13 @@ function buildChainConfig(repoChain: string): {
       seal_policy_id: null,
       storage_backend: 'walrus',
     };
+  } else if (repoChain === 'mantle') {
+    return {
+      author: 'unknown',
+      storage_backend: 'ipfs',
+    };
   }
-  return {
-    author: 'unknown',
-    storage_backend: 'ipfs',
-  };
+  throw new Error(`Unsupported chain "${repoChain}".`);
 }
 
 async function ensureHeadFiles(witPath: string, headCommit: string): Promise<void> {
