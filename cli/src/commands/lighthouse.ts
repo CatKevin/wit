@@ -15,7 +15,7 @@ export async function lighthouseUploadAction(filePath: string, opts: UploadOptio
     }
     const apiKey = resolveLighthouseApiKey();
     if (!apiKey) {
-      printError('Missing LIGHTHOUSE_API_KEY. Set it in .env or export it before running this command.');
+      printError('Missing LIGHTHOUSE_API_KEY. Set it in .env, ~/.witconfig, or export it before running this command.');
       return;
     }
 

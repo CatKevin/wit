@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
 import lighthouse from '@lighthouse-web3/sdk';
@@ -32,11 +33,33 @@ export type LighthouseUploadResult = {
   raw: unknown;
 };
 
+type LighthouseGlobalConfig = {
+  lighthouse_api_key?: string;
+  lighthouse_upload_url?: string;
+  lighthouse_gateway_url?: string;
+  lighthouse_pin_url?: string;
+  ipfs_gateway_url?: string;
+  ipfs_gateway_urls?: string[];
+  lighthouseApiKey?: string;
+  lighthouseUploadUrl?: string;
+  lighthouseGatewayUrl?: string;
+  lighthousePinUrl?: string;
+  ipfsGatewayUrl?: string;
+  ipfsGatewayUrls?: string[];
+};
+
 let dotenvLoaded = false;
+let globalConfigLoaded = false;
+let globalConfigCache: LighthouseGlobalConfig = {};
 
 export function resolveLighthouseApiKey(): string | null {
   loadDotEnvOnce();
-  return process.env.LIGHTHOUSE_API_KEY || process.env.WIT_LIGHTHOUSE_API_KEY || null;
+  const envKey = process.env.LIGHTHOUSE_API_KEY || process.env.WIT_LIGHTHOUSE_API_KEY;
+  if (envKey) return envKey;
+  const cfg = loadGlobalConfigOnce();
+  const cfgKey = cfg.lighthouse_api_key || cfg.lighthouseApiKey;
+  if (typeof cfgKey === 'string' && cfgKey.trim().length > 0) return cfgKey;
+  return null;
 }
 
 export function resolveLighthouseGatewayUrl(): string {
@@ -46,13 +69,40 @@ export function resolveLighthouseGatewayUrl(): string {
     process.env.LIGHTHOUSE_GATEWAY_URL ||
     process.env.WIT_IPFS_GATEWAY_URL ||
     process.env.IPFS_GATEWAY_URL;
-  return normalizeGatewayUrl(envUrl || 'https://gateway.lighthouse.storage');
+  if (envUrl) return normalizeGatewayUrl(envUrl);
+  const cfg = loadGlobalConfigOnce();
+  const cfgUrl =
+    cfg.lighthouse_gateway_url ||
+    cfg.lighthouseGatewayUrl ||
+    cfg.ipfs_gateway_url ||
+    cfg.ipfsGatewayUrl ||
+    (Array.isArray(cfg.ipfs_gateway_urls) && cfg.ipfs_gateway_urls[0]) ||
+    (Array.isArray(cfg.ipfsGatewayUrls) && cfg.ipfsGatewayUrls[0]);
+  return normalizeGatewayUrl(cfgUrl || 'https://gateway.lighthouse.storage');
+}
+
+export function resolveLighthouseUploadUrl(): string | null {
+  loadDotEnvOnce();
+  const envUrl = process.env.WIT_LIGHTHOUSE_UPLOAD_URL || process.env.LIGHTHOUSE_UPLOAD_URL;
+  if (envUrl) return normalizeEndpointUrl(envUrl);
+  const cfg = loadGlobalConfigOnce();
+  const cfgUrl = cfg.lighthouse_upload_url || cfg.lighthouseUploadUrl;
+  return normalizeEndpointUrl(cfgUrl);
+}
+
+export function resolveLighthousePinUrl(): string | null {
+  loadDotEnvOnce();
+  const envUrl = process.env.WIT_LIGHTHOUSE_PIN_URL || process.env.LIGHTHOUSE_PIN_URL;
+  if (envUrl) return normalizeEndpointUrl(envUrl);
+  const cfg = loadGlobalConfigOnce();
+  const cfgUrl = cfg.lighthouse_pin_url || cfg.lighthousePinUrl;
+  return normalizeEndpointUrl(cfgUrl);
 }
 
 export function requireLighthouseApiKey(): string {
   const key = resolveLighthouseApiKey();
   if (!key) {
-    throw new Error('Missing LIGHTHOUSE_API_KEY. Set it in .env or export it before running this command.');
+    throw new Error('Missing LIGHTHOUSE_API_KEY. Set it in .env, ~/.witconfig, or export it before running this command.');
   }
   return key;
 }
@@ -115,6 +165,11 @@ function normalizeCidVersion(cidVersion?: number): number {
 function normalizeGatewayUrl(url: string): string {
   if (!url) return 'https://gateway.lighthouse.storage';
   return url.replace(/\/+$/, '');
+}
+
+function normalizeEndpointUrl(url?: string | null): string | null {
+  if (!url) return null;
+  return url.trim().replace(/\/+$/, '');
 }
 
 function mapProgress(onProgress?: (progress: number) => void) {
@@ -279,6 +334,25 @@ async function verifyRawBytes(cid: string, bytes: Uint8Array): Promise<void> {
 function hasApiKey(): boolean {
   const key = process.env.LIGHTHOUSE_API_KEY || process.env.WIT_LIGHTHOUSE_API_KEY;
   return typeof key === 'string' && key.trim().length > 0;
+}
+
+function loadGlobalConfigOnce(): LighthouseGlobalConfig {
+  if (globalConfigLoaded) return globalConfigCache;
+  globalConfigLoaded = true;
+  const configPath = path.join(os.homedir(), '.witconfig');
+  if (!fs.existsSync(configPath)) return globalConfigCache;
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      globalConfigCache = parsed as LighthouseGlobalConfig;
+    }
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.warn(`Warning: could not read ${configPath}: ${err.message}`);
+    globalConfigCache = {};
+  }
+  return globalConfigCache;
 }
 
 function tryLoadDotEnv(options: dotenv.DotenvConfigOptions): void {
