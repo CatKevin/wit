@@ -27,7 +27,7 @@ import { removeUserAction } from './removeUser';
 import { chainCurrentAction, chainListAction, chainUseAction } from './chain';
 import { formatChainMismatchMessage } from '../lib/chain';
 import { getRepoChainMismatch, readRepoConfig, requireWitDir } from '../lib/repo';
-import { carPackAction, carUnpackAction } from './ipfsCar';
+import { carMapAction, carPackAction, carUnpackAction } from './ipfsCar';
 import { lighthouseUploadAction } from './lighthouse';
 import { lighthouseDownloadAction } from './lighthouseDownload';
 
@@ -239,6 +239,13 @@ export function registerCommands(program: Command): void {
     .command('car-unpack <car_file> <out_dir>')
     .description('Unpack a CAR snapshot to a directory')
     .action((carFile: string, outDir: string) => carUnpackAction(carFile, outDir));
+
+  program
+    .command('car-map <car_file>')
+    .description('Generate a path -> CID map from a CAR snapshot')
+    .option('-o, --out <path>', 'output JSON path (prints to stdout if omitted)')
+    .option('--no-strip-root', 'keep the top-level CAR root segment in paths')
+    .action((carFile: string, opts: { out?: string; stripRoot?: boolean }) => carMapAction(carFile, opts));
 
   program
     .command('lighthouse-upload <file>')

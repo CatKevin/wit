@@ -15,6 +15,15 @@ export type CarPackResult = {
   output: string;
 };
 
+export type CarPathMapOptions = {
+  stripRoot?: boolean;
+};
+
+export type CarPathMapResult = {
+  root: string;
+  map: Record<string, string>;
+};
+
 export async function packCar(inputPath: string, outputPath: string, opts?: CarPackOptions): Promise<CarPackResult> {
   const absInput = path.resolve(inputPath);
   const absOutput = path.resolve(outputPath);
@@ -107,6 +116,39 @@ export async function unpackCar(inputPath: string, outputDir: string): Promise<v
   }
 }
 
+export async function mapCarPaths(inputPath: string, opts: CarPathMapOptions = {}): Promise<CarPathMapResult> {
+  const absInput = path.resolve(inputPath);
+  const [{ CarIndexedReader }, { recursive: exporter }] = await Promise.all([
+    import('@ipld/car/indexed-reader'),
+    import('ipfs-unixfs-exporter'),
+  ]);
+  const reader = await CarIndexedReader.fromFile(absInput);
+  const roots = await reader.getRoots();
+  if (!roots.length) {
+    throw new Error('CAR file does not include roots.');
+  }
+  const root = roots[0].toString();
+  const entries = exporter(roots[0], {
+    async get(cid) {
+      const block = await reader.get(cid);
+      if (!block) {
+        throw new Error(`Missing block: ${cid}`);
+      }
+      return block.bytes;
+    },
+  });
+
+  const map: Record<string, string> = {};
+  for await (const entry of entries) {
+    if (entry.type === 'file' || entry.type === 'raw' || entry.type === 'identity') {
+      const rel = opts.stripRoot === false ? entry.path : stripCarRoot(entry.path);
+      map[rel] = entry.cid.toString();
+    }
+  }
+
+  return { root, map };
+}
+
 function mapEntryPath(outputRoot: string, entryPath: string): string {
   const parts = entryPath.split('/');
   if (parts.length === 0) {
@@ -114,4 +156,10 @@ function mapEntryPath(outputRoot: string, entryPath: string): string {
   }
   parts[0] = outputRoot;
   return path.join(...parts);
+}
+
+function stripCarRoot(entryPath: string): string {
+  const parts = entryPath.split('/').filter((part) => part.length > 0);
+  if (parts.length <= 1) return entryPath;
+  return parts.slice(1).join('/');
 }

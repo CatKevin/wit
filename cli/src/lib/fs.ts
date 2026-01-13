@@ -8,6 +8,7 @@ export type FileMeta = {
   size: number;
   mode: string;
   mtime: number;
+  cid?: string;
   enc?: {
     alg: 'aes-256-gcm' | 'seal-aes-256-gcm';
     iv: string;

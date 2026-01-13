@@ -1,12 +1,17 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { colors } from '../lib/ui';
-import { packCar, unpackCar } from '../lib/ipfsCar';
+import { mapCarPaths, packCar, unpackCar } from '../lib/ipfsCar';
 
 type PackOptions = {
   out?: string;
   wrap?: boolean;
   rootOut?: string;
+};
+
+type MapOptions = {
+  out?: string;
+  stripRoot?: boolean;
 };
 
 export async function carPackAction(input: string, opts: PackOptions): Promise<void> {
@@ -47,6 +52,34 @@ export async function carUnpackAction(carFile: string, outDir: string): Promise<
     console.log(`  input: ${path.resolve(carFile)}`);
     // eslint-disable-next-line no-console
     console.log(`  output: ${path.resolve(outDir)}`);
+  } catch (err) {
+    printError(errorMessage(err));
+  }
+}
+
+export async function carMapAction(carFile: string, opts: MapOptions): Promise<void> {
+  try {
+    if (!carFile) {
+      printError('CAR file is required. Usage: wit car-map <file.car> --out <path>');
+      return;
+    }
+    const result = await mapCarPaths(carFile, { stripRoot: opts.stripRoot !== false });
+    const payload = JSON.stringify(result.map, null, 2) + '\n';
+    if (opts.out) {
+      const outPath = path.resolve(opts.out);
+      await fs.writeFile(outPath, payload, 'utf8');
+      // eslint-disable-next-line no-console
+      console.log(colors.green('CAR path map written.'));
+      // eslint-disable-next-line no-console
+      console.log(`  root: ${colors.hash(result.root)}`);
+      // eslint-disable-next-line no-console
+      console.log(`  output: ${outPath}`);
+      // eslint-disable-next-line no-console
+      console.log(`  entries: ${Object.keys(result.map).length}`);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(payload.trimEnd());
+    }
   } catch (err) {
     printError(errorMessage(err));
   }

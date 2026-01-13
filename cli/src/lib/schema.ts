@@ -6,6 +6,7 @@ const fileMeta = z.object({
   mode: z.string().regex(/^\d{6}$/),
   mtime: z.number().int().nonnegative(),
   id: z.string().min(1).optional(),
+  cid: z.string().min(1).optional(),
   enc: z
     .object({
       alg: z.union([z.literal('aes-256-gcm'), z.literal('seal-aes-256-gcm')]),
