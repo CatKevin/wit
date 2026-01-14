@@ -27,7 +27,7 @@ import { encryptWithSeal } from '../lib/seal';
 import { WIT_PACKAGE_ID } from '../lib/constants';
 import { EvmRepoService, formatRepoId } from '../lib/evmRepo';
 import { loadMantleSigner } from '../lib/evmProvider';
-import { LitService } from '../lib/lit';
+import { LitService, LIT_ACTION_CID } from '../lib/lit';
 import { uploadBufferToLighthouse, uploadTextToLighthouse } from '../lib/lighthouse';
 import { generateSessionKey, encryptBuffer } from '../lib/crypto';
 
@@ -543,6 +543,11 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
   const litService = new LitService();
   const contractAddress = evmRepo.getAddress();
 
+  // Use user-provided CID for Lit Action (optimization)
+  const litActionCid = LIT_ACTION_CID;
+  // eslint-disable-next-line no-console
+  console.log(colors.gray(`  Using Lit Action CID: ${litActionCid}`));
+
   for (let i = 0; i < chain.length; i += 1) {
     const item = chain[i];
     // eslint-disable-next-line no-console
@@ -579,7 +584,8 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
         contentToUpload = ciphertext;
 
         // Lit Encrypt Session Key
-        const acc = litService.getAccessControlConditions(repoId.toString(), contractAddress);
+        if (!litActionCid) throw new Error("Lit Action CID missing for private repo");
+        const acc = litService.getAccessControlConditions(repoId.toString(), contractAddress, litActionCid);
         const { ciphertext: litKey, dataToEncryptHash } = await litService.encryptSessionKey(sessionKey, acc);
 
         encMetadata = {

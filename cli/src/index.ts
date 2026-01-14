@@ -11,6 +11,13 @@ if (!Array.prototype.toReversed) {
   };
 }
 
+// Polyfill for global crypto (Node environment for Lit SDK)
+import crypto from 'crypto';
+if (!globalThis.crypto) {
+  globalThis.crypto = crypto as any;
+}
+
+
 
 // Suppress noisy Lit SDK deprecation warnings
 const originalWarn = console.warn;

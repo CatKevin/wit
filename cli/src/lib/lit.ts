@@ -9,13 +9,19 @@ import { generateSessionKey, encryptBuffer, decryptBuffer } from './crypto';
 export const LIT_NETWORK = 'datil-test';
 
 export const LIT_ACTION_CODE = `
-const go = async () => {
+(async () => {
     // --- Configuration ---
     const RPC_URL = "https://rpc.sepolia.mantle.xyz";
   
-    // jsParams: repoId, contractAddress, userAddress
+    // 1. Get params from accessControlConditions
+    const _cond = accessControlConditions.find(c => c.standardContractType === "LitAction");
+    const params = _cond.parameters;
+    const repoId = params[0];
+    const contractAddress = params[1];
+    const userAddress = params[2];
+
     if (!repoId || !contractAddress || !userAddress) {
-        console.log("Missing required params: repoId, contractAddress, userAddress");
+        console.log("Missing required params");
         LitActions.setResponse({ response: "false" });
         return;
     }
@@ -25,21 +31,21 @@ const go = async () => {
     ];
     
     const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
-    // Explicitly define provider to avoid issues with default providers in Lit
     const contract = new ethers.Contract(contractAddress, abi, provider);
     
     try {
-        console.log(\`Checking access for Repo \${repoId}, User \${userAddress} on Mantle Sepolia...\`);
+        console.log("Checking access for Repo " + repoId + " User " + userAddress);
         const hasAccess = await contract.hasAccess(repoId, userAddress);
-        console.log(\`Result: \${hasAccess}\`);
+        console.log("Result: " + hasAccess);
         LitActions.setResponse({ response: hasAccess.toString() }); 
     } catch (error) {
         console.error("Error checking access:", error);
         LitActions.setResponse({ response: "false" });
     }
-};
-go();
+})();
 `;
+
+export const LIT_ACTION_CID = 'bafkreibojoz4mvdp6zw4ezgsk7olt6l6jr5e6yqjaltjttaayfjwbhlz34';
 
 export interface LitInitConfig {
     debug?: boolean;
@@ -64,24 +70,21 @@ export class LitService {
      * @param contractAddress The Wit Repo Contract address on Mantle Sepolia.
      * @returns The ACC array compatible with Lit SDK.
      */
-    getAccessControlConditions(repoId: string, contractAddress: string) {
+    getAccessControlConditions(repoId: string, contractAddress: string, actionCid: string) {
         return [
             {
-                contractAddress: '', // Not used for litActionCondition
-                standardContractType: '',
-                chain: 'ethereum', // Placeholder, required but ignored by logic
-                method: '',
-                parameters: [],
+                contractAddress: `ipfs://${actionCid}`,
+                standardContractType: 'LitAction',
+                chain: 'ethereum',
+                method: 'go',
+                parameters: [
+                    repoId,
+                    contractAddress,
+                    ':userAddress'
+                ],
                 returnValueTest: {
                     comparator: '=',
                     value: 'true',
-                },
-                conditionType: 'litActionCondition',
-                code: LIT_ACTION_CODE,
-                jsParams: {
-                    repoId,
-                    contractAddress,
-                    userAddress: ':userAddress', // Dynamic substitution by Lit
                 },
             },
         ];
