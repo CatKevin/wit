@@ -38,6 +38,19 @@ export async function cloneAction(repoId: string): Promise<void> {
   }
   const activeChain = await readActiveChain();
   const repoChain = inferRepoChain(repoId, activeChain);
+  if (repoId.startsWith('mantle:') || repoChain === 'mantle') {
+    try {
+      const { cloneFromMantle } = await import('../lib/evmClone.js');
+      await cloneFromMantle(repoId);
+      return;
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error(colors.red(`Clone failed: ${err.message}`));
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   if (repoChain !== activeChain) {
     // eslint-disable-next-line no-console
     console.error(colors.red(formatChainMismatchMessage(repoChain, activeChain)));

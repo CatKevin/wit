@@ -14,6 +14,7 @@ export type RepoConfig = {
   seal_policy_id?: string | null;
   created_at: string;
   description?: string;
+  isPrivate?: boolean;
 };
 
 export type ChainConfig = {
@@ -183,7 +184,7 @@ export async function readRemoteState(witPath: string): Promise<RemoteState | nu
 
 export async function writeRemoteState(witPath: string, state: RemoteState): Promise<void> {
   const file = path.join(witPath, 'state', 'remote.json');
-  await fs.mkdir(path.dirname(file), {recursive: true});
+  await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, JSON.stringify(state, null, 2) + '\n', 'utf8');
 }
 
@@ -201,7 +202,7 @@ export async function readRemoteRef(witPath: string): Promise<string | null> {
 
 export async function writeRemoteRef(witPath: string, commitId: string | null): Promise<void> {
   const file = path.join(witPath, DEFAULT_REMOTE_REF);
-  await fs.mkdir(path.dirname(file), {recursive: true});
+  await fs.mkdir(path.dirname(file), { recursive: true });
   const val = commitId ? `${commitId}\n` : '';
   await fs.writeFile(file, val, 'utf8');
 }

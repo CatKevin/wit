@@ -55,9 +55,13 @@ export async function initAction(name?: string, options?: InitOptions): Promise<
       }
       // eslint-disable-next-line no-console
       console.log('Initialized as PRIVATE repository. Encryption will be enabled on first push.');
+    } else if (activeChain === 'mantle') {
+      repoCfg.isPrivate = true;
+      // eslint-disable-next-line no-console
+      console.log('Initialized as PRIVATE repository (Lit Protocol). Encryption will be enabled on first push.');
     } else {
       // eslint-disable-next-line no-console
-      console.log('Warning: --private is only supported on Sui for now; no seal policy was set.');
+      console.log('Warning: --private is only supported on Sui and Mantle for now; no seal policy was set.');
     }
   }
 

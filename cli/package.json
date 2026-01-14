@@ -53,6 +53,9 @@
   "engines": {
     "node": ">=18"
   },
+  "overrides": {
+    "@lit-protocol/contracts": "^0.9.0"
+  },
   "license": "Apache-2.0",
   "files": [
     "dist/**",

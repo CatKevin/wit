@@ -155,4 +155,35 @@ export class LitService {
         // The encrypt function above treats input as Uint8Array if passed buffer.
         return Buffer.from(decryptedString.decryptedData);
     }
+
+    /**
+     * Generates a SIWE AuthSig using a local ethers Signer.
+     * This is required for Lit Protocol to authenticate the user and check access.
+     */
+    async getAuthSig(signer: ethers.Signer): Promise<any> {
+        const address = await signer.getAddress();
+        const domain = 'localhost';
+        const origin = 'https://localhost/login';
+        const statement = 'Sign in to Wit CLI to decrypt repository data.';
+        const now = new Date().toISOString();
+        const chainId = 5003; // Mantle Sepolia, though Lit often defaults to 1 for SIWE checks unless specified.
+
+        // Construct SIWE Message (EIP-4361)
+        // Note: Newlines (\n) are critical.
+        const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${statement}\n\nURI: ${origin}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${this.randomNonce()}\nIssued At: ${now}`;
+
+        const signature = await signer.signMessage(message);
+
+        return {
+            sig: signature,
+            derivedVia: 'web3.eth.personal.sign',
+            signedMessage: message,
+            address: address,
+        };
+    }
+
+    private randomNonce(): string {
+        return Math.random().toString(36).substring(2, 12);
+    }
 }
+import { ethers } from 'ethers';
