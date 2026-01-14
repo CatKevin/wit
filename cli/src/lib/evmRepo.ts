@@ -38,7 +38,7 @@ export class EvmRepoService {
     async createRepo(name: string, description: string, isPrivate: boolean): Promise<bigint> {
         console.log(colors.gray(`Creating repo "${name}" on contract ${this.contract.target}...`));
         const tx = await this.contract.createRepo(name, description, isPrivate);
-        console.log(colors.gray(`Tx sent: ${tx.hash}. Waiting for confirmation...`));
+        console.log(colors.gray(`Tx sent: ${getExplorerLink(tx.hash)}`));
         const receipt: TransactionReceipt = await tx.wait();
 
         // Parse logs to find RepositoryCreated
@@ -74,7 +74,7 @@ export class EvmRepoService {
         // Checking WitPolyRepo.sol: `string rootHash` (line 19 struct). 
         // Yes, updateHead arg 5 is string newRootHash.
 
-        console.log(colors.gray(`Updating head for repo ${repoId} to version ${expectedVersion + 1n}...`));
+        console.log(colors.gray(`Updating head for repo ${formatRepoId(repoId)} to version ${expectedVersion + 1n}...`));
         const tx = await this.contract.updateHead(
             repoId,
             commitCid,
@@ -84,7 +84,7 @@ export class EvmRepoService {
             expectedVersion,
             parent
         );
-        console.log(colors.gray(`Tx sent: ${tx.hash}. Waiting...`));
+        console.log(colors.gray(`Tx sent: ${getExplorerLink(tx.hash)}`));
         await tx.wait();
     }
 
@@ -114,6 +114,7 @@ export class EvmRepoService {
         };
     }
 
+
     getAddress(): string {
         return this.contract.target as string;
     }
@@ -124,4 +125,19 @@ function resolveContractAddress(chainId: number): string {
         return WIT_CONTRACT_ADDRESS_MANTLE_SEPOLIA;
     }
     throw new Error(`No contract address known for chain ID ${chainId}`);
+}
+
+function getExplorerLink(txHash: string): string {
+    // Mantle Sepolia Explorer
+    return `https://sepolia.mantlescan.xyz/tx/${txHash}`;
+}
+
+export function formatRepoId(id: bigint): string {
+    // Format as 20-byte hex string (similar to address)
+    // 20 bytes = 40 hex chars
+    let hex = id.toString(16);
+    while (hex.length < 40) {
+        hex = '0' + hex;
+    }
+    return '0x' + hex;
 }

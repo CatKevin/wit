@@ -25,7 +25,7 @@ import { fetchRepositoryStateWithRetry, createRepository, updateRepositoryHead }
 import { ManifestSchema, type Manifest } from '../lib/schema';
 import { encryptWithSeal } from '../lib/seal';
 import { WIT_PACKAGE_ID } from '../lib/constants';
-import { EvmRepoService } from '../lib/evmRepo';
+import { EvmRepoService, formatRepoId } from '../lib/evmRepo';
 import { loadMantleSigner } from '../lib/evmProvider';
 import { LitService } from '../lib/lit';
 import { uploadBufferToLighthouse, uploadTextToLighthouse } from '../lib/lighthouse';
@@ -478,7 +478,7 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
   let onchainState;
   let repoId = BigInt(0);
 
-  if (repoIdStr && /^\d+$/.test(repoIdStr)) {
+  if (repoIdStr && (/^\d+$/.test(repoIdStr) || /^0x[0-9a-fA-F]+$/.test(repoIdStr))) {
     repoId = BigInt(repoIdStr);
     try {
       onchainState = await evmRepo.getRepoState(repoId);
@@ -489,11 +489,13 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
     // Create new repo
     const isPrivate = repoCfg.isPrivate === true;
     repoId = await evmRepo.createRepo(repoCfg.repo_name || 'WitRepo', repoCfg.repo_name || 'WitRepo', isPrivate);
-    repoCfg.repo_id = repoId.toString();
+    // Store as formatted hex string
+    repoCfg.repo_id = formatRepoId(repoId);
     await writeRepoConfig(witPath, repoCfg);
     createdRepo = true;
+
     // eslint-disable-next-line no-console
-    console.log(colors.green(`Created on-chain repository ${repoId}`));
+    console.log(colors.green(`Created on-chain repository ${repoCfg.repo_id} (Mantle Sepolia)`));
     onchainState = {
       headCommit: '',
       version: 0n,
@@ -525,7 +527,7 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
 
   // 4. Lit + Upload Loop
   // eslint-disable-next-line no-console
-  console.log(colors.cyan(`Commits to upload: ${chain.length}`));
+  console.log(colors.cyan(`Found ${chain.length} commit(s) to push.`));
 
   let parentRemoteId = onchainState.headCommit || null;
   if (parentRemoteId === '') parentRemoteId = null;
@@ -550,7 +552,17 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
     const entries = Object.entries(item.commit.tree.files).sort((a, b) => a[0].localeCompare(b[0]));
     const filesStats: any[] = [];
 
+
     // Process files (Encryption + Upload)
+    const isPrivateRepo = onchainState.isPrivate || repoCfg.isPrivate;
+    if (isPrivateRepo) {
+      // eslint-disable-next-line no-console
+      console.log(colors.gray(`  Encrypting ${entries.length} files (AES-256-GCM) & sealing with Lit Protocol...`));
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(colors.gray(`  Uploading ${entries.length} files (Public, no encryption)...`));
+    }
+
     for (const [rel, meta] of entries) {
       const buf = await readBlob(witPath, meta.hash);
       if (!buf) throw new Error(`Missing blob for ${rel}`);
@@ -559,7 +571,7 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
       let contentToUpload = buf;
       let encMetadata: any = undefined;
 
-      if (onchainState.isPrivate || repoCfg.isPrivate) {
+      if (isPrivateRepo) {
         // Generate Session Key
         const sessionKey = generateSessionKey();
         // Encrypt Content

@@ -11,6 +11,20 @@ if (!Array.prototype.toReversed) {
   };
 }
 
+
+// Suppress noisy Lit SDK deprecation warnings
+const originalWarn = console.warn;
+console.warn = (...args: any[]) => {
+  if (
+    args.length > 0 &&
+    typeof args[0] === 'string' &&
+    args[0].includes('deprecated LogLevel is deprecated')
+  ) {
+    return;
+  }
+  originalWarn(...args);
+};
+
 const VERSION = pkg.version || '0.0.0';
 
 export async function run(argv = process.argv): Promise<void> {
