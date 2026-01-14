@@ -8,6 +8,39 @@ import { generateSessionKey, encryptBuffer, decryptBuffer } from './crypto';
 // For this MVP we will target 'datil-test'
 export const LIT_NETWORK = 'datil-test';
 
+export const LIT_ACTION_CODE = `
+const go = async () => {
+    // --- Configuration ---
+    const RPC_URL = "https://rpc.sepolia.mantle.xyz";
+  
+    // jsParams: repoId, contractAddress, userAddress
+    if (!repoId || !contractAddress || !userAddress) {
+        console.log("Missing required params: repoId, contractAddress, userAddress");
+        LitActions.setResponse({ response: "false" });
+        return;
+    }
+  
+    const abi = [
+        "function hasAccess(uint256 repoId, address user) view returns (bool)"
+    ];
+    
+    const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+    // Explicitly define provider to avoid issues with default providers in Lit
+    const contract = new ethers.Contract(contractAddress, abi, provider);
+    
+    try {
+        console.log(\`Checking access for Repo \${repoId}, User \${userAddress} on Mantle Sepolia...\`);
+        const hasAccess = await contract.hasAccess(repoId, userAddress);
+        console.log(\`Result: \${hasAccess}\`);
+        LitActions.setResponse({ response: hasAccess.toString() }); 
+    } catch (error) {
+        console.error("Error checking access:", error);
+        LitActions.setResponse({ response: "false" });
+    }
+};
+go();
+`;
+
 export interface LitInitConfig {
     debug?: boolean;
 }
@@ -21,6 +54,37 @@ export class LitService {
             litNetwork: LIT_NETWORK,
             debug: config.debug ?? false,
         });
+    }
+
+    /**
+     * Generates the Access Control Conditions (ACC) for a specific repo.
+     * This uses the custom Lit Action to check access on Mantle Sepolia.
+     * 
+     * @param repoId The repository ID (uint256 string).
+     * @param contractAddress The Wit Repo Contract address on Mantle Sepolia.
+     * @returns The ACC array compatible with Lit SDK.
+     */
+    getAccessControlConditions(repoId: string, contractAddress: string) {
+        return [
+            {
+                contractAddress: '', // Not used for litActionCondition
+                standardContractType: '',
+                chain: 'ethereum', // Placeholder, required but ignored by logic
+                method: '',
+                parameters: [],
+                returnValueTest: {
+                    comparator: '=',
+                    value: 'true',
+                },
+                conditionType: 'litActionCondition',
+                code: LIT_ACTION_CODE,
+                jsParams: {
+                    repoId,
+                    contractAddress,
+                    userAddress: ':userAddress', // Dynamic substitution by Lit
+                },
+            },
+        ];
     }
 
     async connect() {
