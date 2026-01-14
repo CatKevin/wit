@@ -180,10 +180,32 @@ export async function cloneFromMantle(repoIdStr: string, destDir: string = proce
         // eslint-disable-next-line no-console
         console.log(colors.green(`Successfully decrypted ${decryptionCount} private files.`));
     }
+
+    await litService.disconnect();
 }
 
 async function downloadBuffer(cid: string): Promise<Buffer> {
     const res = await downloadFromLighthouseGateway(cid, { verify: false });
+
+    // Check if it's an HTML directory listing (Lighthouse/IPFS gateway behavior)
+    // We sniff the first few bytes or check strings.
+    const preview = Buffer.from(res.bytes.slice(0, 500)).toString('utf8');
+    if (preview.trim().startsWith('<!DOCTYPE html') || preview.includes('Index of /ipfs/')) {
+        // Parse for the first file link
+        // Format: <a href="/ipfs/{cid}/{filename}">
+        // We look for the specific CID followed by a slash and a filename.
+        // Regex: href="/ipfs/CID/([^"]+)"
+        const regex = new RegExp(`href="/ipfs/${cid}/([^"]+)"`);
+        const match = preview.match(regex) || Buffer.from(res.bytes).toString('utf8').match(regex);
+
+        if (match && match[1]) {
+            const filename = match[1];
+            // Recurse with the path
+            // Note: We bypass verification because we are modifying the CID/path
+            return downloadBuffer(`${cid}/${filename}`);
+        }
+    }
+
     return Buffer.from(res.bytes);
 }
 

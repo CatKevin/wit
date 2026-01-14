@@ -691,6 +691,7 @@ async function verifyCarBytes(cid: string, bytes: Uint8Array): Promise<void> {
   const [{ CarReader }, { CID }, { validateBlock }] = await Promise.all([
     import('@ipld/car/reader'),
     import('multiformats/cid'),
+    // @ts-ignore
     import('@web3-storage/car-block-validator'),
   ]);
   const reader = await CarReader.fromBytes(bytes);
