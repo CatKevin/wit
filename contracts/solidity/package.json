@@ -1,0 +1,24 @@
+{
+    "name": "wit-contracts-evm",
+    "version": "1.0.0",
+    "description": "EVM Smart Contracts for Wit Protocol (Mantle)",
+    "main": "index.js",
+    "license": "MIT",
+    "scripts": {
+        "test": "hardhat test",
+        "compile": "hardhat compile",
+        "deploy:mantle-sepolia": "hardhat run scripts/deploy.ts --network mantleSepolia"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+        "@openzeppelin/hardhat-upgrades": "^3.9.1",
+        "hardhat": "^2.19.0",
+        "ts-node": "^10.9.1",
+        "typescript": "^5.0.0"
+    },
+    "dependencies": {
+        "@openzeppelin/contracts": "^5.0.0",
+        "@openzeppelin/contracts-upgradeable": "^5.0.0",
+        "dotenv": "^16.0.0"
+    }
+}

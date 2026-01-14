@@ -2,3 +2,6 @@ cli/node_modules/
 cli/dist/
 cli/.env
 contracts/move/build
+contracts/solidity/artifacts
+contracts/solidity/cache
+contracts/solidity/node_modules
