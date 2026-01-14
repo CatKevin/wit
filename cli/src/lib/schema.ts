@@ -9,7 +9,11 @@ const fileMeta = z.object({
   cid: z.string().min(1).optional(),
   enc: z
     .object({
-      alg: z.union([z.literal('aes-256-gcm'), z.literal('seal-aes-256-gcm')]),
+      alg: z.union([
+        z.literal('aes-256-gcm'),
+        z.literal('seal-aes-256-gcm'),
+        z.literal('lit-aes-256-gcm'),
+      ]),
       iv: z.string().min(1),
       tag: z.string().min(1),
       policy: z.string().min(1).optional(),
@@ -17,6 +21,11 @@ const fileMeta = z.object({
       package_id: z.string().min(1).optional(),
       sealed_session_key: z.string().min(1).optional(),
       cipher_size: z.number().int().nonnegative().optional(),
+      // Lit Protocol specific fields
+      lit_encrypted_key: z.string().min(1).optional(),
+      access_control_conditions: z.array(z.any()).optional(),
+      lit_chain: z.string().min(1).optional(),
+      lit_network: z.string().min(1).optional(),
     })
     .optional(),
 });
