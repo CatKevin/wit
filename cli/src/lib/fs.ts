@@ -3,23 +3,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import ignore, { Ignore } from 'ignore';
 
-export type FileMeta = {
-  hash: string;
-  size: number;
-  mode: string;
-  mtime: number;
-  cid?: string;
-  enc?: {
-    alg: 'aes-256-gcm' | 'seal-aes-256-gcm';
-    iv: string;
-    tag: string;
-    policy?: string;
-    policy_id?: string;
-    package_id?: string;
-    sealed_session_key?: string;
-    cipher_size?: number;
-  };
-};
+import { type FileMeta } from './schema';
+
+export { type FileMeta };
 
 export type Index = Record<string, FileMeta>;
 

@@ -77,3 +77,4 @@ export const QuiltSchema = z.object({
 
 export type Manifest = z.infer<typeof ManifestSchema>;
 export type CommitObjectSchema = z.infer<typeof CommitSchema>;
+export type FileMeta = z.infer<typeof fileMeta>;
