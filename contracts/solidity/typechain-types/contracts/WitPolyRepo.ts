@@ -26,20 +26,16 @@ import type {
 export interface WitPolyRepoInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "UPGRADE_INTERFACE_VERSION"
       | "addCollaborator"
       | "collaborators"
       | "createRepo"
       | "hasAccess"
-      | "initialize"
       | "owner"
-      | "proxiableUUID"
       | "removeCollaborator"
       | "renounceOwnership"
       | "repositories"
       | "transferOwnership"
       | "updateHead"
-      | "upgradeToAndCall"
   ): FunctionFragment;
 
   getEvent(
@@ -47,16 +43,10 @@ export interface WitPolyRepoInterface extends Interface {
       | "CollaboratorAdded"
       | "CollaboratorRemoved"
       | "HeadUpdated"
-      | "Initialized"
       | "OwnershipTransferred"
       | "RepositoryCreated"
-      | "Upgraded"
   ): EventFragment;
 
-  encodeFunctionData(
-    functionFragment: "UPGRADE_INTERFACE_VERSION",
-    values?: undefined
-  ): string;
   encodeFunctionData(
     functionFragment: "addCollaborator",
     values: [BigNumberish, AddressLike]
@@ -73,15 +63,7 @@ export interface WitPolyRepoInterface extends Interface {
     functionFragment: "hasAccess",
     values: [BigNumberish, AddressLike]
   ): string;
-  encodeFunctionData(
-    functionFragment: "initialize",
-    values?: undefined
-  ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "proxiableUUID",
-    values?: undefined
-  ): string;
   encodeFunctionData(
     functionFragment: "removeCollaborator",
     values: [BigNumberish, AddressLike]
@@ -102,15 +84,7 @@ export interface WitPolyRepoInterface extends Interface {
     functionFragment: "updateHead",
     values: [BigNumberish, string, string, string, string, BigNumberish, string]
   ): string;
-  encodeFunctionData(
-    functionFragment: "upgradeToAndCall",
-    values: [AddressLike, BytesLike]
-  ): string;
 
-  decodeFunctionResult(
-    functionFragment: "UPGRADE_INTERFACE_VERSION",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "addCollaborator",
     data: BytesLike
@@ -121,12 +95,7 @@ export interface WitPolyRepoInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "createRepo", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "hasAccess", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "initialize", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "proxiableUUID",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "removeCollaborator",
     data: BytesLike
@@ -144,10 +113,6 @@ export interface WitPolyRepoInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "updateHead", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "upgradeToAndCall",
-    data: BytesLike
-  ): Result;
 }
 
 export namespace CollaboratorAddedEvent {
@@ -198,18 +163,6 @@ export namespace HeadUpdatedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace InitializedEvent {
-  export type InputTuple = [version: BigNumberish];
-  export type OutputTuple = [version: bigint];
-  export interface OutputObject {
-    version: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
 export namespace OwnershipTransferredEvent {
   export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
   export type OutputTuple = [previousOwner: string, newOwner: string];
@@ -234,18 +187,6 @@ export namespace RepositoryCreatedEvent {
     repoId: bigint;
     owner: string;
     name: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace UpgradedEvent {
-  export type InputTuple = [implementation: AddressLike];
-  export type OutputTuple = [implementation: string];
-  export interface OutputObject {
-    implementation: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -296,8 +237,6 @@ export interface WitPolyRepo extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  UPGRADE_INTERFACE_VERSION: TypedContractMethod<[], [string], "view">;
-
   addCollaborator: TypedContractMethod<
     [repoId: BigNumberish, user: AddressLike],
     [void],
@@ -322,11 +261,7 @@ export interface WitPolyRepo extends BaseContract {
     "view"
   >;
 
-  initialize: TypedContractMethod<[], [void], "nonpayable">;
-
   owner: TypedContractMethod<[], [string], "view">;
-
-  proxiableUUID: TypedContractMethod<[], [string], "view">;
 
   removeCollaborator: TypedContractMethod<
     [repoId: BigNumberish, user: AddressLike],
@@ -388,19 +323,10 @@ export interface WitPolyRepo extends BaseContract {
     "nonpayable"
   >;
 
-  upgradeToAndCall: TypedContractMethod<
-    [newImplementation: AddressLike, data: BytesLike],
-    [void],
-    "payable"
-  >;
-
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
-  getFunction(
-    nameOrSignature: "UPGRADE_INTERFACE_VERSION"
-  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "addCollaborator"
   ): TypedContractMethod<
@@ -430,13 +356,7 @@ export interface WitPolyRepo extends BaseContract {
     "view"
   >;
   getFunction(
-    nameOrSignature: "initialize"
-  ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "owner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "proxiableUUID"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "removeCollaborator"
@@ -499,13 +419,6 @@ export interface WitPolyRepo extends BaseContract {
     [void],
     "nonpayable"
   >;
-  getFunction(
-    nameOrSignature: "upgradeToAndCall"
-  ): TypedContractMethod<
-    [newImplementation: AddressLike, data: BytesLike],
-    [void],
-    "payable"
-  >;
 
   getEvent(
     key: "CollaboratorAdded"
@@ -529,13 +442,6 @@ export interface WitPolyRepo extends BaseContract {
     HeadUpdatedEvent.OutputObject
   >;
   getEvent(
-    key: "Initialized"
-  ): TypedContractEvent<
-    InitializedEvent.InputTuple,
-    InitializedEvent.OutputTuple,
-    InitializedEvent.OutputObject
-  >;
-  getEvent(
     key: "OwnershipTransferred"
   ): TypedContractEvent<
     OwnershipTransferredEvent.InputTuple,
@@ -548,13 +454,6 @@ export interface WitPolyRepo extends BaseContract {
     RepositoryCreatedEvent.InputTuple,
     RepositoryCreatedEvent.OutputTuple,
     RepositoryCreatedEvent.OutputObject
-  >;
-  getEvent(
-    key: "Upgraded"
-  ): TypedContractEvent<
-    UpgradedEvent.InputTuple,
-    UpgradedEvent.OutputTuple,
-    UpgradedEvent.OutputObject
   >;
 
   filters: {
@@ -591,17 +490,6 @@ export interface WitPolyRepo extends BaseContract {
       HeadUpdatedEvent.OutputObject
     >;
 
-    "Initialized(uint64)": TypedContractEvent<
-      InitializedEvent.InputTuple,
-      InitializedEvent.OutputTuple,
-      InitializedEvent.OutputObject
-    >;
-    Initialized: TypedContractEvent<
-      InitializedEvent.InputTuple,
-      InitializedEvent.OutputTuple,
-      InitializedEvent.OutputObject
-    >;
-
     "OwnershipTransferred(address,address)": TypedContractEvent<
       OwnershipTransferredEvent.InputTuple,
       OwnershipTransferredEvent.OutputTuple,
@@ -622,17 +510,6 @@ export interface WitPolyRepo extends BaseContract {
       RepositoryCreatedEvent.InputTuple,
       RepositoryCreatedEvent.OutputTuple,
       RepositoryCreatedEvent.OutputObject
-    >;
-
-    "Upgraded(address)": TypedContractEvent<
-      UpgradedEvent.InputTuple,
-      UpgradedEvent.OutputTuple,
-      UpgradedEvent.OutputObject
-    >;
-    Upgraded: TypedContractEvent<
-      UpgradedEvent.InputTuple,
-      UpgradedEvent.OutputTuple,
-      UpgradedEvent.OutputObject
     >;
   };
 }
