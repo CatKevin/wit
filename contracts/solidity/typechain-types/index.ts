@@ -14,6 +14,8 @@ export type { UUPSUpgradeable } from "./@openzeppelin/contracts-upgradeable/prox
 export { UUPSUpgradeable__factory } from "./factories/@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable__factory";
 export type { ContextUpgradeable } from "./@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable";
 export { ContextUpgradeable__factory } from "./factories/@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable__factory";
+export type { Ownable } from "./@openzeppelin/contracts/access/Ownable";
+export { Ownable__factory } from "./factories/@openzeppelin/contracts/access/Ownable__factory";
 export type { IERC1822Proxiable } from "./@openzeppelin/contracts/interfaces/draft-IERC1822.sol/IERC1822Proxiable";
 export { IERC1822Proxiable__factory } from "./factories/@openzeppelin/contracts/interfaces/draft-IERC1822.sol/IERC1822Proxiable__factory";
 export type { IERC1967 } from "./@openzeppelin/contracts/interfaces/IERC1967";

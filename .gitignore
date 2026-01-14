@@ -6,3 +6,4 @@ contracts/solidity/artifacts
 contracts/solidity/cache
 contracts/solidity/node_modules
 contracts/solidity/.env
+contracts/solidity/.openzeppelin
