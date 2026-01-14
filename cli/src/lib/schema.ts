@@ -37,9 +37,6 @@ export const ManifestSchema = z
     snapshot_cid: z.string().min(1).optional(),
     root_hash: z.string().min(1),
     files: z.record(fileMeta),
-  })
-  .refine((manifest) => Boolean(manifest.quilt_id || manifest.snapshot_cid), {
-    message: 'Manifest must include quilt_id or snapshot_cid',
   });
 
 export const CommitSchema = z.object({

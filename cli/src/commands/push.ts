@@ -25,11 +25,27 @@ import { fetchRepositoryStateWithRetry, createRepository, updateRepositoryHead }
 import { ManifestSchema, type Manifest } from '../lib/schema';
 import { encryptWithSeal } from '../lib/seal';
 import { WIT_PACKAGE_ID } from '../lib/constants';
+import { EvmRepoService } from '../lib/evmRepo';
+import { loadMantleSigner } from '../lib/evmProvider';
+import { LitService } from '../lib/lit';
+import { uploadBufferToLighthouse, uploadTextToLighthouse } from '../lib/lighthouse';
+import { generateSessionKey, encryptBuffer } from '../lib/crypto';
 
 type CommitWithId = { id: string; commit: CommitObject };
 type CommitFileMeta = CommitObject['tree']['files'][string];
 
 export async function pushAction(): Promise<void> {
+  const witPath = await requireWitDir();
+  const repoCfg = await readRepoConfig(witPath);
+
+  if (repoCfg.chain === 'mantle') {
+    return mantlePushAction(witPath, repoCfg);
+  } else {
+    return suiPushAction();
+  }
+}
+
+async function suiPushAction(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(colors.header('Starting push...'));
   const witPath = await requireWitDir();
@@ -437,4 +453,234 @@ async function assertResourcesOk(address: string): Promise<boolean> {
     console.warn(`Warning: WAL balance below threshold (${res.minWal} min).`);
   }
   return true;
+}
+
+async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
+  // eslint-disable-next-line no-console
+  console.log(colors.header('Starting push (Mantle Testnet)...'));
+
+  // 1. Prepare environment
+  const headRefPath = await readHeadRefPath(witPath);
+  const headId = await readRef(headRefPath);
+  if (!headId) {
+    throw new Error('No commits to push. Run `wit commit` first.');
+  }
+
+  const signerInfo = await loadMantleSigner(repoCfg.network);
+  const evmRepo = new EvmRepoService(signerInfo);
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan(`Using account ${signerInfo.address}`));
+
+  // 2. Check/Create Repo
+  let repoIdStr = repoCfg.repo_id;
+  let createdRepo = false;
+
+  let onchainState;
+  let repoId = BigInt(0);
+
+  if (repoIdStr && /^\d+$/.test(repoIdStr)) {
+    repoId = BigInt(repoIdStr);
+    try {
+      onchainState = await evmRepo.getRepoState(repoId);
+    } catch (e) {
+      throw e; // Repository not found
+    }
+  } else {
+    // Create new repo
+    const isPrivate = repoCfg.isPrivate === true;
+    repoId = await evmRepo.createRepo(repoCfg.repo_name || 'WitRepo', repoCfg.repo_name || 'WitRepo', isPrivate);
+    repoCfg.repo_id = repoId.toString();
+    await writeRepoConfig(witPath, repoCfg);
+    createdRepo = true;
+    // eslint-disable-next-line no-console
+    console.log(colors.green(`Created on-chain repository ${repoId}`));
+    onchainState = {
+      headCommit: '',
+      version: 0n,
+      isPrivate,
+      headManifest: '',
+      headSnapshot: '',
+      rootHash: '',
+      parentCommit: '',
+      id: repoId,
+      name: repoCfg.repo_name || '',
+      description: '',
+      owner: signerInfo.address,
+    };
+  }
+
+  // 3. Collect Commits
+  const commitMap = await readCommitIdMap(witPath);
+  const { chain, baseRemoteId } = await collectChain(witPath, headId, commitMap);
+
+  if (onchainState.headCommit && onchainState.headCommit !== '' && baseRemoteId !== onchainState.headCommit) {
+    throw new Error('Remote head diverges from local history; run `wit pull`/`fetch` or reset first.');
+  }
+
+  if (commitMap[headId] && onchainState.headCommit === commitMap[headId]) {
+    // eslint-disable-next-line no-console
+    console.log(colors.green('Remote already up to date.'));
+    return;
+  }
+
+  // 4. Lit + Upload Loop
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan(`Commits to upload: ${chain.length}`));
+
+  let parentRemoteId = onchainState.headCommit || null;
+  if (parentRemoteId === '') parentRemoteId = null;
+
+
+
+  let lastManifestId: string | null = null;
+  let lastCommitRemoteId: string | null = null;
+  let lastRootHash: string = '';
+  const nextMap = { ...commitMap };
+
+  // Initialize Lit Service
+  const litService = new LitService();
+  const contractAddress = evmRepo.getAddress();
+
+  for (let i = 0; i < chain.length; i += 1) {
+    const item = chain[i];
+    // eslint-disable-next-line no-console
+    console.log(colors.cyan(`Uploading commit ${i + 1}/${chain.length}: ${item.id}`));
+
+    // Upload logic
+    const entries = Object.entries(item.commit.tree.files).sort((a, b) => a[0].localeCompare(b[0]));
+    const filesStats: any[] = [];
+
+    // Process files (Encryption + Upload)
+    for (const [rel, meta] of entries) {
+      const buf = await readBlob(witPath, meta.hash);
+      if (!buf) throw new Error(`Missing blob for ${rel}`);
+
+      // Encryption
+      let contentToUpload = buf;
+      let encMetadata: any = undefined;
+
+      if (onchainState.isPrivate || repoCfg.isPrivate) {
+        // Generate Session Key
+        const sessionKey = generateSessionKey();
+        // Encrypt Content
+        const { ciphertext, iv, authTag } = encryptBuffer(buf, sessionKey);
+        contentToUpload = ciphertext;
+
+        // Lit Encrypt Session Key
+        const acc = litService.getAccessControlConditions(repoId.toString(), contractAddress);
+        const { ciphertext: litKey, dataToEncryptHash } = await litService.encryptSessionKey(sessionKey, acc);
+
+        encMetadata = {
+          alg: 'lit-aes-256-gcm',
+          lit_encrypted_key: litKey,
+          access_control_conditions: acc,
+          lit_chain: 'mantleTestnet',
+          iv: iv.toString('hex'),
+          tag: authTag.toString('hex'),
+          lit_hash: dataToEncryptHash
+        };
+      }
+
+      // Upload to Lighthouse
+      const uploadRes = await uploadBufferToLighthouse(contentToUpload);
+      const cid = uploadRes.cid;
+
+      filesStats.push({
+        rel,
+        meta,
+        cid,
+        enc: encMetadata,
+        size: contentToUpload.length
+      });
+    }
+
+    const rootHash = computeRootHash(item.commit.tree.files);
+    lastRootHash = rootHash;
+
+    // Construct Manifest
+    const manifestFiles: Record<string, any> = {};
+    filesStats.forEach(f => {
+      manifestFiles[f.rel] = {
+        ...f.meta,
+        cid: f.cid,
+        ...(f.enc ? { enc: f.enc } : {})
+      };
+    });
+
+    const manifest: Manifest = ManifestSchema.parse({
+      version: 1,
+      root_hash: rootHash,
+      files: manifestFiles,
+
+    });
+
+    const manifestJson = canonicalStringify(manifest);
+    const manifestUpload = await uploadTextToLighthouse(manifestJson, `manifest-${item.id}`);
+    lastManifestId = manifestUpload.cid;
+
+    // Cache Manifest
+    await cacheJson(path.join(witPath, 'objects', 'manifests', `${idToFileName(lastManifestId)}.json`), manifestJson);
+
+    // Construct Remote Commit
+    const remoteCommit = {
+      tree: {
+        root_hash: rootHash,
+        manifest_cid: lastManifestId,
+
+      },
+      parent: parentRemoteId,
+      author: item.commit.author,
+      message: item.commit.message,
+      timestamp: item.commit.timestamp,
+      extras: { ...item.commit.extras }
+    };
+
+    const remoteJson = canonicalStringify(remoteCommit);
+    const commitUpload = await uploadTextToLighthouse(remoteJson, `commit-${item.id}`);
+    lastCommitRemoteId = commitUpload.cid;
+
+    // Cache Commit
+    await cacheJson(path.join(witPath, 'objects', 'commits', `${idToFileName(lastCommitRemoteId)}.json`), remoteJson);
+
+    // Update local map
+    nextMap[item.id] = lastCommitRemoteId;
+    parentRemoteId = lastCommitRemoteId;
+
+    // eslint-disable-next-line no-console
+    console.log(colors.green(`Uploaded commit ${item.id} -> ${lastCommitRemoteId}`));
+  }
+
+  if (!lastCommitRemoteId || !lastManifestId) {
+    throw new Error("Push produced no commits.");
+  }
+
+  // 5. Update Contract
+  await writeCommitIdMap(witPath, nextMap);
+
+  await evmRepo.updateHead(
+    repoId,
+    lastCommitRemoteId,
+    lastManifestId,
+    '',
+    lastRootHash,
+    onchainState.version,
+    onchainState.headCommit || ''
+  );
+
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan('On-chain head updated'));
+
+  const updatedRemote = {
+    repo_id: repoId.toString(),
+    head_commit: lastCommitRemoteId,
+    head_manifest: lastManifestId,
+    head_quilt: '',
+    version: Number(onchainState.version) + 1,
+  };
+
+  await writeRemoteState(witPath, updatedRemote);
+  await writeRemoteRef(witPath, lastCommitRemoteId);
+
+  // eslint-disable-next-line no-console
+  console.log(colors.green('Push (Mantle) complete.'));
 }
