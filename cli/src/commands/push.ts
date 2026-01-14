@@ -701,4 +701,6 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
 
   // eslint-disable-next-line no-console
   console.log(colors.green('Push (Mantle) complete.'));
+
+  await litService.disconnect();
 }

@@ -96,6 +96,14 @@ export class LitService {
         this.connected = true;
     }
 
+    async disconnect() {
+        if (!this.connected) return;
+        if (typeof (this.litNodeClient as any).disconnect === 'function') {
+            await (this.litNodeClient as any).disconnect();
+        }
+        this.connected = false;
+    }
+
     /**
      * Encrypts a session key using Lit Protocol.
      * 
