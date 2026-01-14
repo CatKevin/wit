@@ -8,10 +8,10 @@ Framework: Hardhat
 ### Deployed Addresses
 
 **Mantle Sepolia Testnet (Chain ID 5003)**
-- **WitPolyRepo (UUPS Proxy)**: `0xbc89b2F377386A46c20E09E02d83A8479bFDc203`
-- **Implementation**: `0x5D8D666dAbf73d705BD59A02227c57d2362a11e7`
+- **WitPolyRepo (Mantle Sepolia)**: `0xf5db3fb6c5C94348dB6Ab32236f16002514ff4F9`
 - **Verified**: Yes (Sourcify/MantleScan)
-- Explorer: https://sepolia.mantlescan.xyz/address/0x5d8d666dabf73d705bd59a02227c57d2362a11e7#code
+- **Verified**: Yes (Sourcify/MantleScan)
+- Explorer: https://sepolia.mantlescan.xyz/address/0xf5db3fb6c5C94348dB6Ab32236f16002514ff4F9#code
 
 ### Commands
 

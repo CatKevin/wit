@@ -11,7 +11,7 @@ const WIT_POLY_REPO_ABI = [
 ];
 
 // Deployed Proxy Address on Mantle Sepolia (5003)
-const WIT_CONTRACT_ADDRESS_MANTLE_SEPOLIA = '0xbc89b2F377386A46c20E09E02d83A8479bFDc203';
+const WIT_CONTRACT_ADDRESS_MANTLE_SEPOLIA = '0xf5db3fb6c5C94348dB6Ab32236f16002514ff4F9';
 
 export type OnChainRepoState = {
     id: bigint;
