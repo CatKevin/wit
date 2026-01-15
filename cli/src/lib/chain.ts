@@ -10,8 +10,8 @@ export type ChainInfo = {
 };
 
 const CHAINS: ChainInfo[] = [
-  { id: 'sui', label: 'Sui' },
-  { id: 'mantle', label: 'Mantle' },
+  { id: 'sui', label: 'Sui Testnet' },
+  { id: 'mantle', label: 'Mantle Mainnet' },
 ];
 
 const DEFAULT_CHAIN: ChainId = 'sui';

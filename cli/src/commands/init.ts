@@ -157,7 +157,9 @@ function buildChainConfig(
 }
 
 function resolveNetwork(activeChain: string, globalCfg: GlobalConfig): string {
-  return globalCfg.network || DEFAULT_NETWORK;
+  if (globalCfg.network) return globalCfg.network;
+  if (activeChain === 'mantle') return 'mainnet';
+  return DEFAULT_NETWORK; // Defaults to 'testnet' for Sui et al.
 }
 
 async function writeConfigIfMissing(file: string, cfg: RepoConfig): Promise<void> {
