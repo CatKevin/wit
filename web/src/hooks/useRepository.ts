@@ -10,6 +10,7 @@ import { getRepository as getSuiRepository, type Repository as SuiRepository } f
 import { useChainContext } from '@/hooks/useChainContext';
 import {
     getRepoState,
+    getRepoCollaborators,
     formatRepoForDisplay,
     parseRepoId,
 } from '@/lib/evm/EvmRepoService';
@@ -61,7 +62,11 @@ export function useRepository(id: string) {
                 try {
                     const repoId = id.startsWith('mantle:') ? id.replace('mantle:', '') : id;
                     const parsedId = parseRepoId(repoId);
-                    const state = await getRepoState(parsedId, MANTLE_MAINNET_CHAIN_ID);
+                    // Parallel fetch state and collaborators
+                    const [state, collaborators] = await Promise.all([
+                        getRepoState(parsedId, MANTLE_MAINNET_CHAIN_ID),
+                        getRepoCollaborators(parsedId, MANTLE_MAINNET_CHAIN_ID)
+                    ]);
 
                     if (!state) return null;
 
@@ -79,6 +84,7 @@ export function useRepository(id: string) {
                         hasData: display.hasData,
                         chainType: 'mantle' as const,
                         chainId: display.chainId,
+                        collaborators: collaborators,
                     };
                 } catch (error) {
                     console.error('[useRepository] Mantle fetch error:', error);

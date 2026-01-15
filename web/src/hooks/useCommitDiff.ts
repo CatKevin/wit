@@ -16,17 +16,17 @@ import type { CommitDiff } from '@/lib/types';
  * @param commitId - The commit blob ID to analyze
  * @returns Diff data and loading state
  */
-export function useCommitDiff(commitId?: string) {
+export function useCommitDiff(commitId?: string, chain: 'sui' | 'mantle' = 'sui') {
     // Fetch current commit
-    const { data: commit, isLoading: commitLoading, error: commitError } = useCommit(commitId);
+    const { data: commit, isLoading: commitLoading, error: commitError } = useCommit(commitId, chain);
 
     // Fetch parent commit (if exists) - use optional chaining to safely access parent
     const parentId = commit?.commit?.parent || undefined;
-    const { data: parentCommit, isLoading: parentLoading } = useCommit(parentId);
+    const { data: parentCommit, isLoading: parentLoading } = useCommit(parentId, chain);
 
     // Enrich both commits with manifest data (fills tree.files if missing)
-    const enrichCurrentResult = useCommitWithManifest(commit);
-    const enrichParentResult = useCommitWithManifest(parentCommit);
+    const enrichCurrentResult = useCommitWithManifest(commit, chain);
+    const enrichParentResult = useCommitWithManifest(parentCommit, chain);
 
     const enrichedCommit = enrichCurrentResult.data;
     const enrichedCommitLoading = enrichCurrentResult.isLoading;

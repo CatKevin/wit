@@ -4,12 +4,19 @@ import { getFileContent, getBlobArrayBuffer, getFileFromQuiltArrayBuffer } from 
 import { computeLineDiff, computeLineStats, isBinaryFile } from '@/lib/diff';
 import { decryptToText } from '@/lib/seal';
 import { useCurrentAccount, useSignTransaction, useSignPersonalMessage, useSuiClient } from '@mysten/dapp-kit';
+import { useLitDecrypt } from '@/hooks/useLitDecrypt';
+import { fetchMantleFileContent } from '@/lib/evm/fetchMantleRepo';
+import { ENCRYPTED_CONTENT_PLACEHOLDER } from '@/hooks/useFile';
 import type { FileChange, LineDiff } from '@/lib/types';
+import type { FileRef } from '@/hooks/useFile';
 
 export interface FileDiffResult {
     lineDiff: LineDiff[] | null;
     stats: { additions: number; deletions: number } | null;
     isBinary: boolean;
+    isEncrypted?: boolean;
+    oldContent?: string;
+    newContent?: string;
     isLoading: boolean;
     error: Error | null;
 }
@@ -38,39 +45,36 @@ export function useFileDiff(
     const { mutateAsync: signTransaction } = useSignTransaction();
     const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
     const account = useCurrentAccount();
+    // useLitDecrypt is not strictly needed here anymore since we moved decryption to UI, 
+    // but kept for potential future use or consistency if we wanted to auto-decrypt.
+    // However, since we return placeholder, we don't use decryptLitFile here.
+
+    const isMantle = oldMeta?.enc?.lit_encrypted_key || newMeta?.enc?.lit_encrypted_key || oldMeta?.cid || newMeta?.cid;
 
     // Check if binary file
     const isBinary = isBinaryFile(path);
 
     // Download old file content (for modified/deleted files)
     const { data: oldContent, isLoading: oldLoading, error: oldError } = useQuery<string>({
-        queryKey: ['file-content', oldMeta?.id || oldMeta?.blob_ref || `${parentQuiltId}:${path}`, 'old', oldMeta?.enc?.iv],
+        queryKey: ['file-content', oldMeta?.id || oldMeta?.blob_ref || oldMeta?.cid || `${parentQuiltId}:${path}`, 'old', oldMeta?.enc?.iv],
         queryFn: async () => {
             if (!oldMeta) return '';
 
-            // Check if file is encrypted
-            if (oldMeta.enc) {
-                if (!account) throw new Error('Wallet not connected. Please connect your wallet to view encrypted files.');
-
-                let buf: ArrayBuffer;
-                if (parentQuiltId) {
-                    buf = await getFileFromQuiltArrayBuffer(parentQuiltId, path);
-                } else if (oldMeta.blob_ref) {
-                    buf = await getBlobArrayBuffer(oldMeta.blob_ref);
-                } else if (oldMeta.id) {
-                    buf = await getBlobArrayBuffer(oldMeta.id);
-                } else {
-                    throw new Error('No valid file reference found for old content');
+            // 1. Mantle / Lit Protocol logic
+            if (isMantle || oldMeta.cid) {
+                if (oldMeta.enc) {
+                    // Manual decryption required
+                    return ENCRYPTED_CONTENT_PLACEHOLDER;
+                } else if (oldMeta.cid) {
+                    // Public Mantle file
+                    return await fetchMantleFileContent(oldMeta.cid);
                 }
+            }
 
-                return await decryptToText(
-                    buf,
-                    oldMeta.enc as any,
-                    account,
-                    (input) => signTransaction({ transaction: input.transaction as any }),
-                    suiClient as any,
-                    (input) => signPersonalMessage({ message: input.message, account } as any)
-                );
+            // 2. Sui / Seal logic
+            if (oldMeta.enc) {
+                // Return placeholder for Sui encrypted files too to use manual decryption UI
+                return ENCRYPTED_CONTENT_PLACEHOLDER;
             }
 
             // Non-encrypted file - use original logic
@@ -92,33 +96,25 @@ export function useFileDiff(
 
     // Download new file content (for modified/added files)
     const { data: newContent, isLoading: newLoading, error: newError } = useQuery<string>({
-        queryKey: ['file-content', newMeta?.id || newMeta?.blob_ref || `${currentQuiltId}:${path}`, 'new', newMeta?.enc?.iv],
+        queryKey: ['file-content', newMeta?.id || newMeta?.blob_ref || newMeta?.cid || `${currentQuiltId}:${path}`, 'new', newMeta?.enc?.iv],
         queryFn: async () => {
             if (!newMeta) return '';
 
-            // Check if file is encrypted
-            if (newMeta.enc) {
-                if (!account) throw new Error('Wallet not connected. Please connect your wallet to view encrypted files.');
-
-                let buf: ArrayBuffer;
-                if (currentQuiltId) {
-                    buf = await getFileFromQuiltArrayBuffer(currentQuiltId, path);
-                } else if (newMeta.blob_ref) {
-                    buf = await getBlobArrayBuffer(newMeta.blob_ref);
-                } else if (newMeta.id) {
-                    buf = await getBlobArrayBuffer(newMeta.id);
-                } else {
-                    throw new Error('No valid file reference found for new content');
+            // 1. Mantle / Lit Protocol logic
+            if (isMantle || newMeta.cid) {
+                if (newMeta.enc) {
+                    // Manual decryption required
+                    return ENCRYPTED_CONTENT_PLACEHOLDER;
+                } else if (newMeta.cid) {
+                    // Public Mantle file
+                    return await fetchMantleFileContent(newMeta.cid);
                 }
+            }
 
-                return await decryptToText(
-                    buf,
-                    newMeta.enc as any,
-                    account,
-                    (input) => signTransaction({ transaction: input.transaction as any }),
-                    suiClient as any,
-                    (input) => signPersonalMessage({ message: input.message, account } as any)
-                );
+            // 2. Sui / Seal logic
+            if (newMeta.enc) {
+                // Return placeholder for Sui encrypted files too to use manual decryption UI
+                return ENCRYPTED_CONTENT_PLACEHOLDER;
             }
 
             // Non-encrypted file - use original logic
@@ -144,6 +140,11 @@ export function useFileDiff(
         if (!isEnabled) return null;
         if (isBinary) return null;
 
+        // Check if content is placeholder "ENCRYPTED"
+        if (oldContent === ENCRYPTED_CONTENT_PLACEHOLDER || newContent === ENCRYPTED_CONTENT_PLACEHOLDER) {
+            return null;
+        }
+
         if (type === 'added') {
             if (!newContent) return null;
             return computeLineDiff('', newContent);
@@ -164,10 +165,15 @@ export function useFileDiff(
         return computeLineStats(lineDiff);
     }, [lineDiff, isEnabled]);
 
+    const isEncrypted = oldContent === ENCRYPTED_CONTENT_PLACEHOLDER || newContent === ENCRYPTED_CONTENT_PLACEHOLDER;
+
     return {
         lineDiff,
         stats,
         isBinary,
+        isEncrypted,
+        oldContent,
+        newContent,
         isLoading: oldLoading || newLoading,
         error: oldError || newError,
     };

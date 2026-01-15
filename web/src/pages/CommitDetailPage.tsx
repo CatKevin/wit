@@ -11,8 +11,9 @@ import { Button } from '@/components/ui/button';
 
 export default function CommitDetailPage() {
     const { repoId, commitId } = useParams<{ repoId: string; commitId: string }>();
-    const { diff, isLoading, error } = useCommitDiff(commitId);
     const { data: repo } = useRepository(repoId!);
+    const chain = repo?.chainType || 'sui';
+    const { diff, isLoading, error } = useCommitDiff(commitId, chain);
 
     if (isLoading) {
         return (

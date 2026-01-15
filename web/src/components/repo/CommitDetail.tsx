@@ -24,6 +24,10 @@ export function CommitDetail({ commitWithId }: CommitDetailProps) {
     const files = enrichedCommit?.commit?.tree?.files
         ? Object.entries(enrichedCommit.commit.tree.files)
         : [];
+    // Note: 'files' is already safely accessed above, but enrichedCommit itself might be incomplete.
+    // The previous logic provided fallbacks in useCommitWithManifest?
+    // Let's ensure commit itself is valid
+    if (!commit) return <div className="p-4 text-red-500">Invalid commit data</div>;
 
     return (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -38,10 +42,10 @@ export function CommitDetail({ commitWithId }: CommitDetailProps) {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                 >
-                    <h3 className="font-medium text-slate-900 text-sm">{commit.message.split('\n')[0]}</h3>
-                    {commit.message.split('\n').slice(1).join('\n').trim() && (
+                    <h3 className="font-medium text-slate-900 text-sm">{(commit.message || 'No message').split('\n')[0]}</h3>
+                    {(commit.message || '').split('\n').slice(1).join('\n').trim() && (
                         <p className="text-sm text-slate-500 whitespace-pre-wrap leading-relaxed mt-1">
-                            {commit.message.split('\n').slice(1).join('\n').trim()}
+                            {(commit.message || '').split('\n').slice(1).join('\n').trim()}
                         </p>
                     )}
                 </motion.div>

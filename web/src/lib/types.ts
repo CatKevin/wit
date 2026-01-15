@@ -7,13 +7,21 @@ export interface CommitFile {
     mtime: number;
     id?: string;        // Walrus file blob ID (for manifest files)
     blob_ref?: string;  // Legacy/alternative blob reference
-    enc?: {             // Encryption metadata for encrypted files
-        alg: string;
+    cid?: string; // Mantle IPFS CID
+    enc?: {
+        alg: 'seal-aes-256-gcm' | 'lit-aes-256-gcm';
         iv: string;
         tag: string;
-        policy_id: string;
-        package_id: string;
-        sealed_session_key: string;
+        // Sui / Seal
+        policy_id?: string;
+        package_id?: string;
+        sealed_session_key?: string;
+        cipher_size?: number;
+        // Mantle / Lit
+        lit_encrypted_key?: string;
+        access_control_conditions?: any;
+        unified_access_control_conditions?: any;
+        lit_hash?: string;
     };
 }
 

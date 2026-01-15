@@ -304,6 +304,53 @@ async function fetchLogsBackwards(
 }
 
 /**
+ * Fetch collaborators for a specific repository
+ * by querying CollaboratorAdded and CollaboratorRemoved events
+ */
+export async function getRepoCollaborators(
+    repoId: bigint | string,
+    chainId: number = MANTLE_MAINNET_CHAIN_ID
+): Promise<string[]> {
+    const client = getClient(chainId);
+    const contractAddress = getContractAddress(chainId);
+    const id = typeof repoId === 'string' ? parseRepoId(repoId) : repoId;
+
+    try {
+        console.log(`[EvmRepoService] Fetching collaborators for repo ${id}...`);
+        const startBlock = chainId === MANTLE_MAINNET_CHAIN_ID ? 90164800n : 0n;
+
+        // Fetch logs
+        // Note: filtering by indexed repoId (topic1)
+        const [addedLogs, removedLogs] = await Promise.all([
+            fetchLogsBackwards(client, contractAddress, eventAbis[1], { repoId: id }, startBlock),
+            fetchLogsBackwards(client, contractAddress, eventAbis[2], { repoId: id }, startBlock)
+        ]);
+
+        const collaborators = new Set<string>();
+
+        // Process Added
+        for (const log of addedLogs) {
+            // viem parses args automatically if abi is provided
+            const user = (log as any).args.user;
+            if (user) collaborators.add(user.toLowerCase());
+        }
+
+        // Process Removed
+        for (const log of removedLogs) {
+            const user = (log as any).args.user;
+            if (user) collaborators.delete(user.toLowerCase());
+        }
+
+        return Array.from(collaborators);
+
+    } catch (error) {
+        console.error('[EvmRepoService] Failed to fetch collaborators:', error);
+        // Fallback or return empty
+        return [];
+    }
+}
+
+/**
  * Fetch all repositories where user is owner or collaborator
  * Uses RPC getLogs to query contract events directly, with fallback to Blockscout API
  */
