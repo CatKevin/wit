@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRepository } from '@/hooks/useRepository';
 import { useManifest } from '@/hooks/useManifest';
-import { useFileContent, type FileRef } from '@/hooks/useFile';
+import { useFileContent, type FileRef, ENCRYPTED_CONTENT_PLACEHOLDER } from '@/hooks/useFile';
+import { useLitDecrypt } from '@/hooks/useLitDecrypt';
 import { useCommitHistory } from '@/hooks/useCommitHistory';
 import { FileTree } from '@/components/repo/FileTree';
 import { FileViewer } from '@/components/repo/FileViewer';
@@ -28,6 +29,15 @@ export default function RepoDetail() {
     const { data: manifest, isLoading: manifestLoading, error: manifestError } = useManifest(repo?.headManifest, chain);
     const { commits, isLoading: commitsLoading, error: commitsError } = useCommitHistory(repo?.headCommit, 50, chain);
     const { data: fileContent, isLoading: fileLoading, error: fileError } = useFileContent(selectedFile?.fileRef);
+
+    // Decryption Hook
+    const { decryptFile, isDecrypting, error: decryptError } = useLitDecrypt();
+    const [decryptedContent, setDecryptedContent] = useState<string | null>(null);
+
+    // Reset decrypted content when file changes
+    useEffect(() => {
+        setDecryptedContent(null);
+    }, [selectedFile?.path]);
 
     const handleCopy = () => {
         navigator.clipboard.writeText(`wit clone ${repo?.id}`);
@@ -267,11 +277,52 @@ export default function RepoDetail() {
                                                         {selectedFile.path}
                                                     </span>
                                                 </div>
-                                                <FileViewer
-                                                    file={selectedFile ? { path: selectedFile.path, content: fileContent || '' } : null}
-                                                    loading={fileLoading}
-                                                    error={fileError ? String(fileError) : undefined}
-                                                />
+                                                {(fileContent === ENCRYPTED_CONTENT_PLACEHOLDER && !decryptedContent) ? (
+                                                    <div className="flex flex-col items-center justify-center min-h-[300px] bg-slate-50 p-8 space-y-4 rounded-xl border border-slate-200">
+                                                        <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center">
+                                                            <Lock className="h-8 w-8 text-slate-500" />
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <p className="font-medium text-slate-700">Encrypted File</p>
+                                                            <p className="text-sm text-slate-500 max-w-sm mt-1 mb-4">
+                                                                This file is encrypted. Sign in with your wallet to verify access and decrypt.
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex flex-col items-center gap-2 w-full">
+                                                            <Button
+                                                                onClick={async () => {
+                                                                    if (!selectedFile?.fileRef) return;
+                                                                    try {
+                                                                        const content = await decryptFile(selectedFile.fileRef);
+                                                                        setDecryptedContent(content);
+                                                                    } catch (e) {
+                                                                        console.error(e);
+                                                                    }
+                                                                }}
+                                                                disabled={isDecrypting}
+                                                                className="w-full max-w-xs"
+                                                            >
+                                                                {isDecrypting ? (
+                                                                    <>
+                                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                        Decrypting...
+                                                                    </>
+                                                                ) : (
+                                                                    'Decrypt & View'
+                                                                )}
+                                                            </Button>
+                                                            {decryptError && (
+                                                                <p className="text-xs text-red-500 font-medium px-4 text-center">{decryptError}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <FileViewer
+                                                        file={selectedFile ? { path: selectedFile.path, content: decryptedContent || fileContent || '' } : null}
+                                                        loading={fileLoading}
+                                                        error={fileError ? String(fileError) : undefined}
+                                                    />
+                                                )}
                                             </div>
                                         </motion.div>
                                     ) : (

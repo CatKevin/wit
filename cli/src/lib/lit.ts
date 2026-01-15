@@ -127,7 +127,7 @@ export class LitService {
         await this.connect();
 
         const { ciphertext, dataToEncryptHash } = await this.litNodeClient.encrypt({
-            dataToEncrypt: sessionKey,
+            dataToEncrypt: sessionKey as any,
             unifiedAccessControlConditions,
         });
 

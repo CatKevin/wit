@@ -12,6 +12,9 @@
   "dependencies": {
     "@ipld/car": "^5.4.2",
     "@lighthouse-web3/sdk": "^0.4.3",
+    "@lit-protocol/auth-helpers": "^7.4.0",
+    "@lit-protocol/constants": "^7.4.0",
+    "@lit-protocol/encryption": "^7.4.0",
     "@lit-protocol/lit-node-client": "^7.4.0",
     "@monaco-editor/react": "^4.7.0",
     "@mysten/dapp-kit": "^0.14.53",

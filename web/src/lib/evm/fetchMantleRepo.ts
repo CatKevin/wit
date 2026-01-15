@@ -69,12 +69,24 @@ export async function fetchMantleManifest(cid: string): Promise<RemoteManifest |
  * Fetch file content from Mantle/IPFS
  * Returns string for text files, throws error for failure
  */
+// ... fetchMantleFileContent ...
 export async function fetchMantleFileContent(cid: string): Promise<string> {
     const text = await LighthouseService.downloadText(cid);
     if (text === null) {
         throw new Error(`Failed to download file content for CID: ${cid}`);
     }
     return text;
+}
+
+/**
+ * Fetch raw file buffer from Mantle/IPFS (for binary/encrypted files)
+ */
+export async function fetchMantleFileBuffer(cid: string): Promise<Uint8Array> {
+    const buffer = await LighthouseService.downloadBuffer(cid);
+    if (!buffer) {
+        throw new Error(`Failed to download file buffer for CID: ${cid}`);
+    }
+    return buffer;
 }
 
 /**

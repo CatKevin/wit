@@ -9,3 +9,6 @@ VITE_LIGHTHOUSE_API_KEY=xxxxx
 
 # Default Chain
 VITE_DEFAULT_CHAIN=mantle
+
+# Just for testing！Please do not use this in a production environment.
+VITE_LIT_PAYER_PRIVATE_KEY=xxxx

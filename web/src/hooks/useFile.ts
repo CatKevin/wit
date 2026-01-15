@@ -21,9 +21,13 @@ export interface FileRef {
         // Lit params
         lit_encrypted_key?: string;
         access_control_conditions?: any;
+        unified_access_control_conditions?: any;
+        lit_hash?: string;
     };
     policyId?: string;
 }
+
+export const ENCRYPTED_CONTENT_PLACEHOLDER = '__ENCRYPTED_MANTLE_FILE__';
 
 export function useFileContent(fileRef?: FileRef) {
     const suiClient = useSuiClient();
@@ -39,10 +43,10 @@ export function useFileContent(fileRef?: FileRef) {
             // Mantle Path
             if (fileRef.chain === 'mantle') {
                 if (fileRef.blobId) {
-                    // TODO: Handle Lit encryption if fileRef.enc is present
+                    // Check if file is encrypted (has enc metadata)
                     if (fileRef.enc) {
-                        console.warn('[useFileContent] Encrypted Mantle files not yet supported in web UI');
-                        return 'Encrypted content (Decryption not yet implemented in Web UI)';
+                        // Return placeholder to trigger Decrypt UI
+                        return ENCRYPTED_CONTENT_PLACEHOLDER;
                     }
                     return fetchMantleFileContent(fileRef.blobId);
                 }
