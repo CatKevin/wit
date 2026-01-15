@@ -7,13 +7,17 @@ const WIT_POLY_REPO_ABI = [
     "event RepositoryCreated(uint256 indexed repoId, address indexed owner, string name)",
     "function updateHead(uint256 repoId, string newCommitCid, string newManifestCid, string newQuiltId, string newRootHash, uint64 expectedVersion, string parentCommitCid) public",
     "function hasAccess(uint256 repoId, address user) public view returns (bool)",
+    "function addCollaborator(uint256 repoId, address user) public",
+    "function removeCollaborator(uint256 repoId, address user) public",
+    "event CollaboratorAdded(uint256 indexed repoId, address indexed user)",
+    "event CollaboratorRemoved(uint256 indexed repoId, address indexed user)",
     "function repositories(uint256) public view returns (uint256 id, string name, string description, bool isPrivate, address owner, uint64 version, string headCommitCid, string headManifestCid, string headQuiltId, string rootHash, string parentCommitCid)"
 ];
 
 // Deployed Proxy Address on Mantle Sepolia (5003)
-const WIT_CONTRACT_ADDRESS_MANTLE_SEPOLIA = '0xf5db3fb6c5C94348dB6Ab32236f16002514ff4F9';
+const WIT_CONTRACT_ADDRESS_MANTLE_SEPOLIA = '0x5996bDBfF0818F948781A27fdEfABa3e608d1506';
 // Deployed Proxy Address on Mantle Mainnet (5000)
-const WIT_CONTRACT_ADDRESS_MANTLE_MAINNET = '0x5D8D666dAbf73d705BD59A02227c57d2362a11e7';
+const WIT_CONTRACT_ADDRESS_MANTLE_MAINNET = '0xbc89b2F377386A46c20E09E02d83A8479bFDc203';
 
 export type OnChainRepoState = {
     id: bigint;

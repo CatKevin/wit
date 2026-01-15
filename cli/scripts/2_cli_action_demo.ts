@@ -29,7 +29,7 @@ if (!PLATFORM_PRIVATE_KEY) {
 }
 
 // Mantle Mainnet Contract
-const MANTLE_CONTRACT = "0x5D8D666dAbf73d705BD59A02227c57d2362a11e7";
+const MANTLE_CONTRACT = "0xbc89b2F377386A46c20E09E02d83A8479bFDc203";
 const REPO_ID = "1";
 
 async function main() {
