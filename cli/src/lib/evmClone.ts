@@ -122,11 +122,12 @@ export async function cloneFromMantle(repoIdStr: string, destDir: string = proce
                 console.log(colors.gray(`  Decrypting ${rel} (Lit Protocol)...`));
 
                 try {
-                    // 1. Decrypt Session Key
+                    const acc = encMeta.unified_access_control_conditions || encMeta.access_control_conditions;
+                    console.log("[DEBUG] Decrypting with conditions:", JSON.stringify(acc));
                     const sessionKey = await litService.decryptSessionKey(
                         encMeta.lit_encrypted_key,
                         encMeta.lit_hash,
-                        encMeta.access_control_conditions,
+                        acc,
                         authSig
                     );
 

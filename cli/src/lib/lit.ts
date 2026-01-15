@@ -64,25 +64,34 @@ export class LitService {
 
     /**
      * Generates the Access Control Conditions (ACC) for a specific repo.
-     * This uses the custom Lit Action to check access on Mantle Sepolia.
+     * Use unifiedAccessControlConditions for evmContract type support.
      * 
-     * @param repoId The repository ID (uint256 string).
-     * @param contractAddress The Wit Repo Contract address on Mantle Sepolia.
-     * @returns The ACC array compatible with Lit SDK.
+     * @param repoId The repository ID.
+     * @param contractAddress The Wit Repo Contract address.
+     * @returns The Unified ACC array compatible with Lit SDK.
      */
-    getAccessControlConditions(repoId: string, contractAddress: string, actionCid: string) {
+    getAccessControlConditions(repoId: string, contractAddress: string) {
         return [
             {
-                contractAddress: `ipfs://${actionCid}`,
-                standardContractType: 'LitAction',
-                chain: 'ethereum',
-                method: 'go',
-                parameters: [
-                    repoId,
-                    contractAddress,
-                    ':userAddress'
-                ],
+                conditionType: 'evmContract',
+                contractAddress: contractAddress,
+                functionName: 'hasAccess',
+                functionParams: [repoId, ':userAddress'],
+                functionAbi: {
+                    name: "hasAccess",
+                    type: "function",
+                    stateMutability: "view",
+                    inputs: [
+                        { name: "repoId", type: "uint256" },
+                        { name: "user", type: "address" }
+                    ],
+                    outputs: [
+                        { name: "", type: "bool" }
+                    ]
+                },
+                chain: 'mantle',
                 returnValueTest: {
+                    key: '',
                     comparator: '=',
                     value: 'true',
                 },
@@ -108,30 +117,18 @@ export class LitService {
      * Encrypts a session key using Lit Protocol.
      * 
      * @param sessionKey The 32-byte session key to encrypt.
-     * @param accessControlConditions The Lit Access Control Conditions.
+     * @param unifiedAccessControlConditions The Lit Unified Access Control Conditions.
      * @returns The { ciphertext, dataToEncryptHash } from Lit encryption.
      */
     async encryptSessionKey(
         sessionKey: Buffer,
-        accessControlConditions: any[]
+        unifiedAccessControlConditions: any[]
     ): Promise<{ ciphertext: string; dataToEncryptHash: string }> {
         await this.connect();
 
-        // In Lit v6+, we use litNodeClient.encrypt() or similar patterns.
-        // However, typically for "encrypt string" we rely on the SDK helper or
-        // manually do the encryption.
-        // For simplicity in this shell, we will assume standard usage:
-        // 1. We encrypt the session key locally? No, Lit encrypts the key.
-        // Wait, standard pattern is:
-        // Lit encrypts the *content key*? 
-        // Actually, usually we use Lit to encrypt a "message" (the session key).
-
-        // Using the 'encryptString' helper from SDK if available, or base encryption.
-        // Since we only installed core client, we use `encrypt` with specific args.
-
         const { ciphertext, dataToEncryptHash } = await this.litNodeClient.encrypt({
             dataToEncrypt: sessionKey,
-            accessControlConditions,
+            unifiedAccessControlConditions,
         });
 
         return { ciphertext, dataToEncryptHash };
@@ -142,28 +139,28 @@ export class LitService {
      * 
      * @param ciphertext The encrypted session key from Lit.
      * @param dataToEncryptHash The hash of the session key.
-     * @param accessControlConditions The conditions used to encrypt.
+     * @param unifiedAccessControlConditions The conditions used to encrypt.
      * @param authSig The user's auth signature (e.g. from wallet).
      * @returns The raw session key (Buffer).
      */
     async decryptSessionKey(
         ciphertext: string,
         dataToEncryptHash: string,
-        accessControlConditions: any[],
+        unifiedAccessControlConditions: any[],
         authSig: any
     ): Promise<Buffer> {
         await this.connect();
 
+        console.log("[DEBUG] LitService.decryptSessionKey called with UACC:", JSON.stringify(unifiedAccessControlConditions));
+
         const decryptedString = await this.litNodeClient.decrypt({
             ciphertext,
             dataToEncryptHash,
-            accessControlConditions,
+            unifiedAccessControlConditions,
             authSig,
-            chain: 'ethereum', // chain is often required but ignored for some conditions
+            chain: 'mantle',
         });
 
-        // decryptedString is typically a Uint8Array or string depending on input.
-        // The encrypt function above treats input as Uint8Array if passed buffer.
         return Buffer.from(decryptedString.decryptedData);
     }
 
@@ -177,11 +174,12 @@ export class LitService {
         const origin = 'https://localhost/login';
         const statement = 'Sign in to Wit CLI to decrypt repository data.';
         const now = new Date().toISOString();
+        const expiration = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(); // 24 hours
         const chainId = 5000; // Mantle Mainnet
 
         // Construct SIWE Message (EIP-4361)
         // Note: Newlines (\n) are critical.
-        const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${statement}\n\nURI: ${origin}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${this.randomNonce()}\nIssued At: ${now}`;
+        const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${statement}\n\nURI: ${origin}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${this.randomNonce()}\nIssued At: ${now}\nExpiration Time: ${expiration}`;
 
         const signature = await signer.signMessage(message);
 

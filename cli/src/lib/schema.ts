@@ -23,7 +23,9 @@ const fileMeta = z.object({
       cipher_size: z.number().int().nonnegative().optional(),
       // Lit Protocol specific fields
       lit_encrypted_key: z.string().min(1).optional(),
+      lit_hash: z.string().min(1).optional(),
       access_control_conditions: z.array(z.any()).optional(),
+      unified_access_control_conditions: z.array(z.any()).optional(),
       lit_chain: z.string().min(1).optional(),
       lit_network: z.string().min(1).optional(),
     })

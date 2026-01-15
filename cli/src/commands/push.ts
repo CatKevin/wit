@@ -584,15 +584,14 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
         contentToUpload = ciphertext;
 
         // Lit Encrypt Session Key
-        if (!litActionCid) throw new Error("Lit Action CID missing for private repo");
-        const acc = litService.getAccessControlConditions(repoId.toString(), contractAddress, litActionCid);
+        const acc = litService.getAccessControlConditions(repoId.toString(), contractAddress);
         const { ciphertext: litKey, dataToEncryptHash } = await litService.encryptSessionKey(sessionKey, acc);
 
         encMetadata = {
           alg: 'lit-aes-256-gcm',
           lit_encrypted_key: litKey,
-          access_control_conditions: acc,
-          lit_chain: 'mantleTestnet',
+          unified_access_control_conditions: acc,
+          lit_chain: 'mantle',
           iv: iv.toString('hex'),
           tag: authTag.toString('hex'),
           lit_hash: dataToEncryptHash

@@ -14,6 +14,8 @@ import { decryptWithSeal } from '../lib/seal';
 import { loadSigner } from '../lib/keys';
 import { formatChainMismatchMessage, readActiveChain, type ChainId } from '../lib/chain';
 
+import { cloneFromMantle } from '../lib/evmClone';
+
 type RemoteCommit = {
   tree: {
     root_hash: string;
@@ -40,7 +42,6 @@ export async function cloneAction(repoId: string): Promise<void> {
   const repoChain = inferRepoChain(repoId, activeChain);
   if (repoId.startsWith('mantle:') || repoChain === 'mantle') {
     try {
-      const { cloneFromMantle } = await import('../lib/evmClone.js');
       await cloneFromMantle(repoId);
       return;
     } catch (err: any) {
