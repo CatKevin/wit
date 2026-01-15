@@ -2,11 +2,9 @@
 
 **Your code, truly private. No corporation, no government, no AI can access it.**
 
-WIT provides **Fully Encrypted Storage** by leveraging **Seal** for decentralized key management and **Walrus** for decentralized storage.
+**Online Demo**: [https://catkevin.github.io/wit-app/](https://catkevin.github.io/wit-app/)
 
-```bash
-npm install -g withub-cli
-```
+WIT provides **Fully Encrypted Storage** by leveraging **Lit Protocol** for decentralized access control, **IPFS** for resilient, distributed storage, and **Mantle** for immutable state management.
 
 ## Why Now? The Risks of Centralization
 
@@ -21,205 +19,126 @@ npm install -g withub-cli
 ## The Solution: Complete End-to-End Encryption + Decentralization
 
 **WIT** (CLI) and **Withub** (Web) solve this with:
-- **Seal**: Decentralized key management - only YOU control access
-- **Walrus**: Distributed storage across 100+ nodes - no single point of failure
-- **Sui**: Blockchain state management - permanent, uncensorable
+- **Lit Protocol**: Decentralized key management & access control - only YOU control access
+- **IPFS**: Distributed content-addressed storage - no single point of failure
+- **Mantle**: High-performance L2 blockchain for state management & permissions
 
-## Core Security Features
-
-### 🔐 True End-to-End Encryption
-```bash
-# Your code is encrypted BEFORE leaving your machine
-wit init my-project --private
-wit add secret-algorithm.py
-wit commit -m "Proprietary code"
-wit push  # Encrypted with AES-256-GCM, sealed with your keys
-```
-- Code encrypted locally before any network transmission
-- Even Walrus storage nodes see only encrypted blobs
-- Mathematically impossible for anyone else to decrypt
-
-### 🌍 Unstoppable Distributed Storage
-- Your code split across 100+ global nodes via erasure coding
-- Survives even if 1/3 of all nodes fail simultaneously
-- No single country or corporation can shut it down
-- Works even when GitHub/Cloudflare are completely offline
-
-### 🔑 Your Keys, Your Control
-- No accounts to ban, no platforms to trust
-- Lose GitHub access? Your WIT repositories remain accessible
-- Automatic key rotation when removing collaborators
-
-## Quick Start
-
-```bash
-# Install
-npm install -g withub-cli
-
-# Generate your sovereign identity
-wit account generate
-
-# Create fully encrypted repository
-wit init quantum-trading-bot --private
-wit add .
-wit commit -m "Initial commit"
-wit push  # Now permanently encrypted and distributed
-```
-
-## Real Protection Against Real Threats
+### Real Protection Against Real Threats
 
 | Threat | GitHub/Local Git | WIT + Withub |
 |--------|------------------|--------------|
 | **AI Training** | Your code trains competitor's AI | Encrypted - useless for training |
 | **Account Ban** | Lose all private repos | Keys ensure perpetual access |
-| **Platform Outage** | Can't access code | Works via any Walrus node |
-| **Government Seizure** | Code confiscated | Distributed across 100+ jurisdictions |
-| **Hardware Failure** | Total data loss | Automatic distributed backup |
+| **Platform Outage** | Can't access code | Works via generic IPFS gateways |
+| **Government Seizure** | Code confiscated | Distributed across global IPFS nodes |
 | **Corporate Espionage** | Employees can read private repos | Zero-knowledge encryption |
 
-## Git Compatible Commands
+## Core Security Features
 
+### 🔐 True End-to-End Encryption
+Your code is encrypted **locally** (AES-256-GCM) before it ever leaves your machine. Storage nodes see only ciphertext. It is mathematically impossible for anyone without access rights to decrypt your data.
+
+### 🌍 Resilient Distributed Storage
+Files are stored on **IPFS** (InterPlanetary File System) via decentralized pinning services (Lighthouse). Your repository survives outages, censorship, and data center failures.
+
+### 🔑 Dynamic Access Control
+Access is managed via **Smart Contracts** and **Lit Protocol**.
+- **No shared passwords**: Session keys are encrypted specifically for authorized wallet addresses.
+- **Instant Revocation**: Remove a collaborator on-chain, and they immediately lose access to future updates.
+
+## Getting Started
+
+### Installation
 ```bash
-wit init project          # Initialize repository
-wit add .                 # Stage files
-wit commit -m "msg"       # Commit changes
-wit push                  # Push to Walrus + Sui
-wit clone 0xabc...        # Clone repository
+npm install -g withub-cli
+```
+
+### Quick Start
+```bash
+# 1. Generate your sovereign identity
+wit account generate
+
+# 2. Initialize a private repository
+wit init my-project --private
+
+# 3. Add and commit files
+wit add .
+wit commit -m "Initial secret commit"
+
+# 4. Push to IPFS + Mantle (Encrypted)
+wit push
+```
+
+### Common Commands
+```bash
+wit clone mantle:0xabc... # Clone from Mantle (Hex ID)
 wit pull                  # Pull updates
-wit invite 0xabc...      # Add collaborator
+wit invite 0xabc...      # Add collaborator (updates contract)
+wit status                # Check repo status
 ```
 
 ## Withub Web Interface
 
-Browse repositories without any backend:
-- Monaco editor with syntax highlighting
-- Commit history and diffs
-- Client-side decryption for private repos
-- Direct blockchain queries
-- Zero telemetry or tracking
+Browse repositories without any backend. The web interface performs client-side decryption using your wallet signature.
 
-## Installation
+- **URL**: [https://catkevin.github.io/wit-app/](https://catkevin.github.io/wit-app/)
+- **Features**: Monaco editor, commit history, diff view, zero telemetry.
 
+**Self-Host**:
 ```bash
-# CLI
-npm install -g withub-cli
-
-# Web (self-host)
 git clone https://github.com/CatKevin/wit
 cd web && npm install && npm run dev
 ```
 
 ---
 
-**Stop trusting corporations with your intellectual property. Start owning your code.**
+## Technical Verification: Privacy & Encryption
 
-Repository: [https://github.com/CatKevin/wit](https://github.com/CatKevin/wit)
+> **Goal**: Verify privacy features using Lit Protocol (Hybrid Envelope Encryption).
 
-## Privacy & Encryption Testing Guide
+### Core Architecture
 
-> **Goal**: Verify privacy features using Seal SDK, including private repo creation, envelope encryption, on-chain whitelist management, and decryption.
+1.  **Data Layer**: File content is encrypted with a random `session_key` (AES-256-GCM).
+2.  **Access Layer**: The `session_key` is encrypted by **Lit Protocol**, bound to the Mantle contract's `hasAccess()` function.
+3.  **Decryption**: Only wallets that satisfy `hasAccess()` can request Lit nodes to decrypt the `session_key`.
 
-### Core Concept: Envelope Encryption
+### Testing Guide
 
-To achieve efficient and decentralized privacy, we use the Envelope Encryption pattern:
-1.  **Data Encryption**: File content is encrypted using a randomly generated symmetric key (AES-256-GCM).
-2.  **Key Encapsulation**: The symmetric key itself is encrypted using the **Seal SDK**, targeting the on-chain **Seal Policy ID** (Whitelist object ID).
-3.  **Decryption Flow**:
-    *   User requests decryption and proves they have access rights.
-    *   User wallet signs a transaction pointing to `whitelist::seal_approve`.
-    *   Seal service nodes verify the transaction signature and on-chain whitelist status.
-    *   Upon verification, the Seal service returns the decrypted symmetric key.
-    *   Client uses the symmetric key to decrypt the file content.
+#### Prerequisites
+- **Accounts**: OWNER (Creator), COLLAB (Invited), ALIEN (Unauthorized).
+- **Network**: Mantle Mainnet Testnet.
 
-### Prerequisites
+#### Test Cases
 
-1.  **Install**
-    ```bash
-    # CLI
-    npm install -g withub-cli
+**1. Create Private Repo**
+```bash
+wit init demo-repo --private
+# Verify: .wit/config.json contains correct chain/privacy settings
+```
 
-    # Web
-    cd ../web && npm install && npm run build
-    ```
-2.  **Test Accounts**
-    *   **OWNER**: Creator of the private repository.
-    *   **COLLAB**: Invited collaborator.
-    *   **ALIEN**: Unauthorized third-party user (for negative testing).
+**2. Push & Encrypt**
+```bash
+echo "Secret" > secret.txt
+wit add . && wit commit -m "test" && wit push
+# Verify: Output shows "Encrypting files...", IPFS stores ciphertext
+```
 
-### Test Cases
+**3. Invite Collaborator**
+```bash
+wit invite <COLLAB_ADDRESS>
+# Verify: Transaction confirmed on Mantle
+```
 
-#### Case 1: Create Private Repo (Init Private)
-**Goal**: Verify `wit init --private` correctly initializes local config and marks it as pending private status.
-**Steps**:
-1.  Switch to **OWNER** account.
-2.  Initialize private repo:
-    ```bash
-    wit init demo-repo --private
-    ```
-3.  **Verify**: Check `.wit/config.json`, it should contain `seal_policy_id = "pending"`.
+**4. Decrypt (Collaborator)**
+```bash
+wit account use <COLLAB_ADDRESS>
+wit clone mantle:<REPO_ID> collab-repo
+# Verify: "Fetching session keys...", content is "Secret"
+```
 
-#### Case 2: Push & Policy Creation
-**Goal**: Verify the first Push automatically creates an on-chain Whitelist object and uses its ID for encryption.
-**Steps**:
-1.  Add files:
-    ```bash
-    echo "Secret Data 123" > secret.txt
-    wit add .
-    wit commit -m "Initial secret commit"
-    ```
-2.  Push to chain:
-    ```bash
-    wit push
-    ```
-3.  **Verify**:
-    *   CLI output should show `Creating private repository...` and `Seal Policy ID: <OBJECT_ID>`.
-    *   Check `.wit/config.json`, `seal_policy_id` should be updated to the actual Object ID.
-
-#### Case 3: Invite Collaborator
-**Goal**: Verify `wit invite` updates the collaborator list and calls `whitelist::add` to authorize Seal access.
-**Steps**:
-1.  Get **COLLAB** address.
-2.  Execute invite:
-    ```bash
-    wit invite <COLLAB_ADDRESS>
-    ```
-3.  **Verify**: CLI indicates success.
-
-#### Case 4: Collaborator Clone & Decrypt
-**Goal**: Verify collaborator can successfully decrypt data using Seal SDK.
-**Steps**:
-1.  Switch to **COLLAB** account:
-    ```bash
-    wit account use <COLLAB_ADDRESS>
-    ```
-2.  Clone repository:
-    ```bash
-    wit clone <REPO_ID> collab-repo
-    cd collab-repo
-    ```
-3.  **Verify**:
-    *   CLI prompts `Decrypting file: secret.txt...`.
-    *   Check content: `cat secret.txt` should output `Secret Data 123`.
-
-#### Case 5: Web Decryption
-**Goal**: Verify Web frontend can complete decryption flow via browser wallet.
-**Steps**:
-1.  Start Web service: `npm run dev` (in `wit/web`).
-2.  Open `http://localhost:5173`.
-3.  Connect **COLLAB** account wallet.
-4.  Go to repository detail page and click `secret.txt`.
-5.  **Verify**:
-    *   Browser requests wallet signature (Sign Transaction -> `seal_approve`).
-    *   After signing, page displays decrypted plaintext `Secret Data 123`.
-
-#### Case 6: Unauthorized Access (Negative Test)
-**Goal**: Verify users not on the whitelist cannot decrypt.
-**Steps**:
-1.  Switch to **ALIEN** account.
-2.  Attempt to clone:
-    ```bash
-    wit clone <REPO_ID> alien-repo
-    ```
-3.  **Verify**:
-    *   Clone might succeed (metadata is public), but **decryption must fail**.
-    *   CLI reports `Seal decryption failed` or content remains encrypted/garbled.
+**5. Unauthorized Access (Alien)**
+```bash
+wit account use <ALIEN_ADDRESS>
+wit clone mantle:<REPO_ID> alien-repo
+# Verify: Decryption FAILS (Lit Access Control denied)
+```
