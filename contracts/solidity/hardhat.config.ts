@@ -23,6 +23,11 @@ const config: HardhatUserConfig = {
             accounts: [PRIVATE_KEY],
             chainId: 5003,
         },
+        mantle: {
+            url: "https://rpc.mantle.xyz",
+            accounts: [PRIVATE_KEY],
+            chainId: 5000,
+        },
     },
     etherscan: {
         apiKey: process.env.ETHERSCAN_API_KEY,
@@ -33,6 +38,14 @@ const config: HardhatUserConfig = {
                 urls: {
                     apiURL: 'https://api-sepolia.mantlescan.xyz/api',
                     browserURL: 'https://sepolia.mantlescan.xyz/',
+                },
+            },
+            {
+                network: 'mantle',
+                chainId: 5000,
+                urls: {
+                    apiURL: 'https://api.mantlescan.xyz/api',
+                    browserURL: 'https://mantlescan.xyz/',
                 },
             },
         ],
