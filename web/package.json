@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ipld/car": "^5.4.2",
+    "@lighthouse-web3/sdk": "^0.4.3",
+    "@lit-protocol/lit-node-client": "^7.4.0",
     "@monaco-editor/react": "^4.7.0",
     "@mysten/dapp-kit": "^0.14.53",
     "@mysten/seal": "^0.9.4",
@@ -30,12 +33,16 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "diff": "^8.0.2",
+    "ethers": "^5.8.0",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.554.0",
+    "multiformats": "^13.4.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "thirdweb": "^5.117.1",
+    "uint8arrays": "^5.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

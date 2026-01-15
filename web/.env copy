@@ -1,0 +1,11 @@
+# Thirdweb
+VITE_THIRDWEB_CLIENT_ID=xxxx
+
+# Mantle RPC (optional, defaults to public RPC)
+VITE_MANTLE_RPC_URL=https://rpc.mantle.xyz
+
+# Lighthouse
+VITE_LIGHTHOUSE_API_KEY=xxxxx
+
+# Default Chain
+VITE_DEFAULT_CHAIN=mantle
