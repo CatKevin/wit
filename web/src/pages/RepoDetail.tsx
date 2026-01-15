@@ -40,7 +40,8 @@ export default function RepoDetail() {
     }, [selectedFile?.path]);
 
     const handleCopy = () => {
-        navigator.clipboard.writeText(`wit clone ${repo?.id}`);
+        const idToCopy = chain === 'mantle' ? `mantle:${repo?.id}` : repo?.id;
+        navigator.clipboard.writeText(`wit clone ${idToCopy}`);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -136,7 +137,9 @@ export default function RepoDetail() {
                             <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 rounded-xl font-mono text-sm">
                                 <span className="text-green-400">$</span>
                                 <span className="text-slate-300">wit clone</span>
-                                <span className="text-slate-500">{repo.id.slice(0, 12)}...</span>
+                                <span className="text-slate-500">
+                                    {chain === 'mantle' ? 'mantle:' : ''}{repo.id.slice(0, 12)}...
+                                </span>
                                 <button
                                     onClick={handleCopy}
                                     className="ml-2 p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
