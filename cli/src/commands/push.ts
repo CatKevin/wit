@@ -457,7 +457,7 @@ async function assertResourcesOk(address: string): Promise<boolean> {
 
 async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
   // eslint-disable-next-line no-console
-  console.log(colors.header('Starting push (Mantle Testnet)...'));
+  console.log(colors.header('Starting push (Mantle Mainnet)...'));
 
   // 1. Prepare environment
   const headRefPath = await readHeadRefPath(witPath);
@@ -495,7 +495,7 @@ async function mantlePushAction(witPath: string, repoCfg: any): Promise<void> {
     createdRepo = true;
 
     // eslint-disable-next-line no-console
-    console.log(colors.green(`Created on-chain repository ${repoCfg.repo_id} (Mantle Sepolia)`));
+    console.log(colors.green(`Created on-chain repository ${repoCfg.repo_id} (Mantle Mainnet)`));
     onchainState = {
       headCommit: '',
       version: 0n,
