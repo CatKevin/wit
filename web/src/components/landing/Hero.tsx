@@ -80,7 +80,7 @@ export default function Hero() {
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.7, duration: 0.6 }}
                 >
-                    Store on Walrus. Encrypt with Seal. Access on Sui.
+                    Store on IPFS. Encrypt with Lit Protocol. Access on Mantle.
                 </motion.p>
 
                 {/* 终端窗口 */}

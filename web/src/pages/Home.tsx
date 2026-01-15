@@ -147,7 +147,7 @@ export default function Home() {
                         </h2>
                         <p className="text-xl text-slate-600 leading-relaxed">
                             Initialize a new repository with <code className="bg-slate-100 px-2 py-1 rounded text-sm">--private</code> flag.
-                            Your code will be encrypted end-to-end using Seal protocol.
+                            Your code will be encrypted end-to-end using Lit Protocol.
                         </p>
                         <div className="flex items-center gap-4 pt-4">
                             <div className="flex items-center gap-2 text-slate-500">
@@ -214,7 +214,7 @@ export default function Home() {
                             Push to the Chain
                         </h2>
                         <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-                            One command encrypts your files, uploads to Walrus, and records the state on Sui blockchain.
+                            One command encrypts your files, uploads to IPFS, and records the state on Mantle Network.
                             <br />
                             <span className="text-green-400">Truly decentralized. Truly yours.</span>
                         </p>
@@ -235,13 +235,13 @@ export default function Home() {
                         transition={{ delay: 0.5 }}
                     >
                         <a
-                            href="https://suiscan.xyz/testnet"
+                            href="https://mantlescan.xyz"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
                         >
                             <ExternalLink className="h-4 w-4" />
-                            View on Sui Explorer
+                            View on Mantlescan
                         </a>
                     </motion.div>
                 </div>
@@ -262,7 +262,7 @@ export default function Home() {
                             </span>
                         </h2>
                         <p className="text-xl text-slate-600 leading-relaxed">
-                            Anyone with permission can clone the repository. The Seal protocol
+                            Anyone with permission can clone the repository. Lit Protocol
                             automatically handles decryption - just sign with your wallet.
                         </p>
 
@@ -275,7 +275,7 @@ export default function Home() {
                             </div>
 
                             <div className="flex items-center">
-                                {/* Walrus */}
+                                {/* IPFS */}
                                 <div className="flex flex-col items-center flex-1">
                                     <div className="relative group">
                                         <div className="absolute inset-0 bg-white/20 rounded-full blur-xl group-hover:bg-white/30 transition-all" />
@@ -283,7 +283,7 @@ export default function Home() {
                                             <GitBranch className="h-6 w-6 text-slate-900" />
                                         </div>
                                     </div>
-                                    <span className="text-sm font-medium text-white mt-3">Walrus</span>
+                                    <span className="text-sm font-medium text-white mt-3">IPFS</span>
                                     <span className="text-[11px] text-slate-500 font-mono">STORAGE</span>
                                 </div>
 
@@ -298,7 +298,7 @@ export default function Home() {
                                     </div>
                                 </div>
 
-                                {/* Seal */}
+                                {/* Lit Protocol */}
                                 <div className="flex flex-col items-center flex-1">
                                     <div className="relative group">
                                         <div className="absolute inset-0 bg-white/20 rounded-full blur-xl group-hover:bg-white/30 transition-all" />
@@ -306,7 +306,7 @@ export default function Home() {
                                             <Shield className="h-6 w-6 text-slate-900" />
                                         </div>
                                     </div>
-                                    <span className="text-sm font-medium text-white mt-3">Seal</span>
+                                    <span className="text-sm font-medium text-white mt-3">Lit Protocol</span>
                                     <span className="text-[11px] text-slate-500 font-mono">DECRYPT</span>
                                 </div>
 
@@ -358,7 +358,7 @@ export default function Home() {
                         </h2>
                         <p className="text-xl text-slate-400 leading-relaxed">
                             Add team members by their wallet address. Access is managed on-chain
-                            through the Seal whitelist - transparent and verifiable.
+                            through the Lit whitelist - transparent and verifiable.
                         </p>
 
                         {/* 协作者示意 */}
@@ -437,7 +437,7 @@ export default function Home() {
                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                                 </div>
                                 <div className="font-medium text-white mb-1">Balance Check</div>
-                                <div className="text-xs text-slate-500 font-mono">SUI & WAL token status</div>
+                                <div className="text-xs text-slate-500 font-mono">MNT & ETH token status</div>
                             </div>
                         </div>
                     </div>
@@ -504,11 +504,11 @@ export default function Home() {
                             <span className="text-slate-500">· Decentralized Git</span>
                         </div>
                         <div className="flex items-center gap-6 text-slate-400 text-sm">
-                            <span>Built on Sui</span>
+                            <span>Built on Mantle</span>
                             <span>·</span>
-                            <span>Powered by Walrus</span>
+                            <span>Powered by IPFS</span>
                             <span>·</span>
-                            <span>Secured by Seal</span>
+                            <span>Secured by Lit Protocol</span>
                         </div>
                     </div>
                 </div>

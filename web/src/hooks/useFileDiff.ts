@@ -1,14 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { getFileContent, getBlobArrayBuffer, getFileFromQuiltArrayBuffer } from '@/lib/walrus';
+import { getFileContent } from '@/lib/walrus';
 import { computeLineDiff, computeLineStats, isBinaryFile } from '@/lib/diff';
-import { decryptToText } from '@/lib/seal';
-import { useCurrentAccount, useSignTransaction, useSignPersonalMessage, useSuiClient } from '@mysten/dapp-kit';
-import { useLitDecrypt } from '@/hooks/useLitDecrypt';
 import { fetchMantleFileContent } from '@/lib/evm/fetchMantleRepo';
 import { ENCRYPTED_CONTENT_PLACEHOLDER } from '@/hooks/useFile';
 import type { FileChange, LineDiff } from '@/lib/types';
-import type { FileRef } from '@/hooks/useFile';
 
 export interface FileDiffResult {
     lineDiff: LineDiff[] | null;
@@ -41,13 +37,6 @@ export function useFileDiff(
     isEnabled: boolean = true // Default to true for backward compatibility
 ): FileDiffResult {
     const { path, type, oldMeta, newMeta } = change;
-    const suiClient = useSuiClient();
-    const { mutateAsync: signTransaction } = useSignTransaction();
-    const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
-    const account = useCurrentAccount();
-    // useLitDecrypt is not strictly needed here anymore since we moved decryption to UI, 
-    // but kept for potential future use or consistency if we wanted to auto-decrypt.
-    // However, since we return placeholder, we don't use decryptLitFile here.
 
     const isMantle = oldMeta?.enc?.lit_encrypted_key || newMeta?.enc?.lit_encrypted_key || oldMeta?.cid || newMeta?.cid;
 

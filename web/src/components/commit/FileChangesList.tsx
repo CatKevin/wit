@@ -4,7 +4,6 @@ import { FilePlus, FileEdit, FileMinus, ChevronRight, Lock, Loader2 } from 'luci
 import { DiffViewer } from './DiffViewer';
 import { useFileDiff } from '@/hooks/useFileDiff';
 import { useLitDecrypt } from '@/hooks/useLitDecrypt';
-import { fetchMantleFileBuffer } from '@/lib/evm/fetchMantleRepo';
 import { Button } from '@/components/ui/button';
 import { ENCRYPTED_CONTENT_PLACEHOLDER } from '@/hooks/useFile';
 import { computeLineDiff } from '@/lib/diff';
@@ -123,7 +122,7 @@ function FileChangeCard({ change, isExpanded, onToggle, currentQuiltId, parentQu
     const newSize = change.newMeta?.size || 0;
     const sizeDiff = newSize - oldSize;
 
-    const { lineDiff, stats, isBinary, isEncrypted, oldContent, newContent, isLoading, error } = useFileDiff(
+    const { lineDiff, isBinary, isEncrypted, oldContent, newContent, isLoading, error } = useFileDiff(
         change,
         currentQuiltId,
         parentQuiltId,
