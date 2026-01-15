@@ -46,6 +46,12 @@ Access is managed via **Smart Contracts** and **Lit Protocol**.
 - **No shared passwords**: Session keys are encrypted specifically for authorized wallet addresses.
 - **Instant Revocation**: Remove a collaborator on-chain, and they immediately lose access to future updates.
 
+### 📜 Smart Contract Deployment
+**Status**: Deployed on Mantle Mainnet (Beta/Test State)
+**Address**: [`0xbc89b2F377386A46c20E09E02d83A8479bFDc203`](https://mantlescan.xyz/address/0xbc89b2F377386A46c20E09E02d83A8479bFDc203)
+
+> **⚠️ Note**: While deployed on Mainnet, this contract is currently in a **testing phase**. Use with caution and do not store high-value production secrets yet.
+
 ## Getting Started
 
 ### Installation
@@ -106,7 +112,7 @@ cd web && npm install && npm run dev
 
 #### Prerequisites
 - **Accounts**: OWNER (Creator), COLLAB (Invited), ALIEN (Unauthorized).
-- **Network**: Mantle Mainnet Testnet.
+- **Network**: Mantle Mainnet.
 
 #### Test Cases
 
