@@ -1,4 +1,4 @@
-import { Contract, type TransactionReceipt, EventLog } from 'ethers';
+import { Contract, type TransactionReceipt, EventLog, formatEther } from 'ethers';
 import { type EvmSignerContext, resolveMantleConfig } from './evmProvider';
 import { colors } from './ui';
 
@@ -31,34 +31,41 @@ export type OnChainRepoState = {
 
 export class EvmRepoService {
     private contract: Contract;
+    private signerCtx: EvmSignerContext;
 
     constructor(signerCtx: EvmSignerContext) {
+        this.signerCtx = signerCtx;
         const address = resolveContractAddress(signerCtx.config.chainId);
         this.contract = new Contract(address, WIT_POLY_REPO_ABI, signerCtx.signer);
     }
 
     async createRepo(name: string, description: string, isPrivate: boolean): Promise<bigint> {
         console.log(colors.gray(`Creating repo "${name}" on contract ${this.contract.target}...`));
-        const tx = await this.contract.createRepo(name, description, isPrivate);
-        console.log(colors.gray(`Tx sent: ${getExplorerLink(tx.hash)}`));
-        const receipt: TransactionReceipt = await tx.wait();
+        try {
+            const tx = await this.contract.createRepo(name, description, isPrivate);
+            console.log(colors.gray(`Tx sent: ${getExplorerLink(tx.hash)}`));
+            const receipt: TransactionReceipt = await tx.wait();
 
-        // Parse logs to find RepositoryCreated
-        const event = receipt.logs
-            .map(log => {
-                try {
-                    return this.contract.interface.parseLog(log);
-                } catch {
-                    return null;
-                }
-            })
-            .find(parsed => parsed?.name === 'RepositoryCreated');
+            // Parse logs to find RepositoryCreated
+            const event = receipt.logs
+                .map(log => {
+                    try {
+                        return this.contract.interface.parseLog(log);
+                    } catch {
+                        return null;
+                    }
+                })
+                .find(parsed => parsed?.name === 'RepositoryCreated');
 
-        if (!event) {
-            throw new Error(`RepositoryCreated event not found in tx ${tx.hash}`);
+            if (!event) {
+                throw new Error(`RepositoryCreated event not found in tx ${tx.hash}`);
+            }
+
+            return event.args[0] as bigint;
+        } catch (err) {
+            await this.handleTxError(err);
+            throw err;
         }
-
-        return event.args[0] as bigint;
     }
 
     async updateHead(
@@ -77,17 +84,54 @@ export class EvmRepoService {
         // Yes, updateHead arg 5 is string newRootHash.
 
         console.log(colors.gray(`Updating head for repo ${formatRepoId(repoId)} to version ${expectedVersion + 1n}...`));
-        const tx = await this.contract.updateHead(
-            repoId,
-            commitCid,
-            manifestCid,
-            snapshotId,
-            rootHash,
-            expectedVersion,
-            parent
-        );
-        console.log(colors.gray(`Tx sent: ${getExplorerLink(tx.hash)}`));
-        await tx.wait();
+        try {
+            const tx = await this.contract.updateHead(
+                repoId,
+                commitCid,
+                manifestCid,
+                snapshotId,
+                rootHash,
+                expectedVersion,
+                parent
+            );
+            console.log(colors.gray(`Tx sent: ${getExplorerLink(tx.hash)}`));
+            await tx.wait();
+        } catch (err: any) {
+            await this.handleTxError(err);
+            throw err;
+        }
+    }
+
+    private async handleTxError(err: any): Promise<void> {
+        const msg = (err?.message || '').toLowerCase();
+        // Check for common out of gas / insufficient funds errors
+        if (msg.includes('insufficient funds') || msg.includes('gas') || msg.includes('exceeds balance')) {
+            try {
+                const bal = await this.signerCtx.provider.getBalance(this.signerCtx.address);
+                const isMantleMainnet = this.signerCtx.config.chainId === 5000;
+                const symbol = 'MNT';
+
+                // eslint-disable-next-line no-console
+                console.log(colors.red(`\n❌ Transaction failed: Insufficient funds.`));
+                // eslint-disable-next-line no-console
+                console.log(colors.red(`   Wallet:  ${this.signerCtx.address}`));
+                // eslint-disable-next-line no-console
+                console.log(colors.red(`   Balance: ${formatEther(bal)} ${symbol}`));
+
+                if (isMantleMainnet && bal === 0n) {
+                    // eslint-disable-next-line no-console
+                    console.log(colors.yellow(`\n👉 This is Mantle Mainnet. You need real ${symbol} tokens to pay for gas.`));
+                    // eslint-disable-next-line no-console
+                    console.log(colors.yellow(`   Please fund your wallet: ${this.signerCtx.address}`));
+                } else {
+                    // eslint-disable-next-line no-console
+                    console.log(colors.yellow(`\n👉 Please ensure you have enough ${symbol} for gas fees.`));
+                }
+                process.exit(1);
+            } catch (inner) {
+                // If checking balance fails, just let original error propagate
+            }
+        }
     }
 
     async getRepoState(repoId: bigint): Promise<OnChainRepoState> {
