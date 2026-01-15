@@ -106,6 +106,34 @@ export class EvmRepoService {
         }
     }
 
+    async addCollaborator(repoId: bigint, user: string): Promise<void> {
+        console.log(colors.gray(`Adding collaborator ${user} to repo ${formatRepoId(repoId)}...`));
+        try {
+            const tx = await this.contract.addCollaborator(repoId, user);
+            console.log(colors.gray(`Tx sent: ${getExplorerLink(tx.hash)}`));
+            await tx.wait();
+            // eslint-disable-next-line no-console
+            console.log(colors.green(`✅ Collaborator ${user} added successfully.`));
+        } catch (err: any) {
+            await this.handleTxError(err);
+            throw err;
+        }
+    }
+
+    async removeCollaborator(repoId: bigint, user: string): Promise<void> {
+        console.log(colors.gray(`Removing collaborator ${user} from repo ${formatRepoId(repoId)}...`));
+        try {
+            const tx = await this.contract.removeCollaborator(repoId, user);
+            console.log(colors.gray(`Tx sent: ${getExplorerLink(tx.hash)}`));
+            await tx.wait();
+            // eslint-disable-next-line no-console
+            console.log(colors.green(`✅ Collaborator ${user} removed successfully.`));
+        } catch (err: any) {
+            await this.handleTxError(err);
+            throw err;
+        }
+    }
+
     private async handleTxError(err: any): Promise<void> {
         const msg = (err?.message || '').toLowerCase();
         // Check for common out of gas / insufficient funds errors

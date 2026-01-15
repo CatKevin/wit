@@ -1,71 +1,100 @@
 import { SuiClient } from '@mysten/sui/client';
-import { colors } from '../lib/ui';
-import { requireWitDir, readRepoConfig, resolveSuiSealPolicyId, setSuiSealPolicyId, writeRepoConfig } from '../lib/repo';
+import { loadSigner, checkResources } from '../lib/keys';
 import { resolveWalrusConfig } from '../lib/walrus';
-import { loadSigner } from '../lib/keys';
 import { addCollaborator, fetchRepositoryState } from '../lib/suiRepo';
+import { EvmRepoService } from '../lib/evmRepo';
+import { loadMantleSigner } from '../lib/evmProvider';
+import { readRepoConfig, requireWitDir } from '../lib/repo';
+import { colors } from '../lib/ui';
 
-export async function inviteAction(address: string): Promise<void> {
-  if (!address) {
-    throw new Error('Usage: wit invite <address>');
-  }
-  // eslint-disable-next-line no-console
-  console.log(colors.header('Adding collaborator...'));
-  let witPath: string;
+export async function inviteAction(address: string, options: { repo?: string; sealPolicy?: string; sealSecret?: string }) {
   try {
-    witPath = await requireWitDir();
+    const witPath = await requireWitDir();
+    const repoCfg = await readRepoConfig(witPath);
+
+    if (repoCfg.chain !== 'mantle') {
+      // SUI Logic (Default)
+      return inviteActionSui(address, options, repoCfg);
+    }
+
+    // Mantle Logic
+    let repoIdStr = options.repo || repoCfg.repo_id;
+
+    if (!repoIdStr) {
+      // eslint-disable-next-line no-console
+      console.error(colors.red('Error: Repository ID is required. Run inside a wit repo or use --repo <id>.'));
+      process.exit(1);
+    }
+
+    if (repoCfg.isPrivate === false) {
+      console.log(colors.yellow('Warning: This repository is public. Collaborators are not needed for read access (but may be needed for write access).'));
+    }
+
+    if (repoIdStr.startsWith('mantle:')) {
+      repoIdStr = repoIdStr.split(':').pop()!;
+    }
+
+    const repoId = BigInt(repoIdStr!);
+
+    // 2. Connect to Mantle
+    const signerCtx = await loadMantleSigner();
+    const repoService = new EvmRepoService(signerCtx);
+
+    // 3. Add Collaborator
+    await repoService.addCollaborator(repoId, address);
+
   } catch (err: any) {
-    // eslint-disable-next-line no-console
-    console.log(colors.red(err?.message || 'Not a wit repository. Run `wit init` first.'));
-    return;
+    console.error(colors.red(`Command failed: ${err.message}`));
+    process.exit(1);
   }
-  const repoCfg = await readRepoConfig(witPath);
+}
+
+async function inviteActionSui(address: string, options: { sealPolicy?: string; sealSecret?: string }, repoCfg: any) {
   if (!repoCfg.repo_id) {
-    throw new Error('Missing repo_id. Run `wit push` once to create the remote repository.');
+    throw new Error('Repository not initialized on chain. Run `wit push` first.');
   }
 
-  const signerInfo = await loadSigner();
-  const resolved = await resolveWalrusConfig(process.cwd());
-  const suiClient = new SuiClient({ url: resolved.suiRpcUrl });
+  const signer = await loadSigner();
+  const signerAddr = signer.address;
 
-  // Check if repo is private by fetching on-chain state
-  // We could rely on local config, but on-chain is truth.
+  console.log(colors.header(`Adding collaborator ${address} to ${repoCfg.repo_id}...`));
+
+  const res = await checkResources(signerAddr);
+  if (res.hasMinSui === false) {
+    throw new Error(`Insufficient SUI balance. Need at least ${res.minSui} MIST.`);
+  }
+
+  const config = await resolveWalrusConfig();
+  const client = new SuiClient({ url: config.suiRpcUrl });
+
   let whitelistId: string | undefined;
-  try {
-    const state = await fetchRepositoryState(suiClient, repoCfg.repo_id);
-    if (state.sealPolicyId) {
-      whitelistId = state.sealPolicyId;
-      // Update local config if missing
-      const currentPolicyId = resolveSuiSealPolicyId(repoCfg);
-      if (currentPolicyId !== whitelistId) {
-        setSuiSealPolicyId(repoCfg, whitelistId);
-        await writeRepoConfig(witPath, repoCfg);
+  // Attempt to auto-detect if private
+  if (repoCfg.seal_policy_id) {
+    whitelistId = repoCfg.seal_policy_id;
+  } else {
+    try {
+      const state = await fetchRepositoryState(client, repoCfg.repo_id);
+      if (state.sealPolicyId) {
+        whitelistId = state.sealPolicyId;
       }
+    } catch (err) {
+      // ignore
     }
-  } catch (err) {
-    // ignore fetch error, assume public or will fail later
   }
 
-  try {
-    await addCollaborator(suiClient, signerInfo.signer, {
-      repoId: repoCfg.repo_id,
-      collaborator: address,
-      whitelistId
-    });
-    // eslint-disable-next-line no-console
-    console.log(colors.green(`Added ${colors.hash(address)} as collaborator.`));
-    if (whitelistId) {
-      // eslint-disable-next-line no-console
-      console.log(colors.cyan(`User added to Whitelist (${whitelistId}). They can now decrypt the repository.`));
-    }
-  } catch (err: any) {
-    const msg = err?.message || String(err);
-    if (msg.includes('ENotAuthorized') || msg.includes('NotAuthorized')) {
-      // eslint-disable-next-line no-console
-      console.log(colors.red('Add failed: current account is not authorized (owner or collaborator required).'));
-      return;
-    }
-    // eslint-disable-next-line no-console
-    console.log(colors.red(`Add collaborator failed: ${msg}`));
+  // Allow override
+  if (options.sealPolicy) {
+    whitelistId = options.sealPolicy;
+  }
+
+  await addCollaborator(client, signer.signer, {
+    repoId: repoCfg.repo_id,
+    collaborator: address,
+    whitelistId
+  });
+
+  console.log(colors.green(`Collaborator ${address} added successfully.`));
+  if (whitelistId) {
+    console.log(colors.gray(`(Added to private whitelist ${whitelistId})`));
   }
 }

@@ -4,14 +4,21 @@ import { resolveWalrusConfig } from '../lib/walrus';
 import { removeCollaborator, fetchRepositoryState } from '../lib/suiRepo';
 import { requireWitDir, readRepoConfig } from '../lib/repo';
 import { colors } from '../lib/ui';
+import { EvmRepoService } from '../lib/evmRepo';
+import { loadMantleSigner } from '../lib/evmProvider';
 
-export async function removeUserAction(addressToRemove: string): Promise<void> {
+export async function removeUserAction(addressToRemove: string, options: { repo?: string }): Promise<void> {
     const witPath = await requireWitDir();
     const repoCfg = await readRepoConfig(witPath);
+
+    if (repoCfg.chain === 'mantle') {
+        return removeUserActionMantle(addressToRemove, options, repoCfg);
+    }
 
     if (!repoCfg.repo_id) {
         throw new Error('Repository not initialized on chain. Run `wit push` first.');
     }
+
 
     const signer = await loadSigner();
     const address = signer.address;
@@ -65,6 +72,36 @@ export async function removeUserAction(addressToRemove: string): Promise<void> {
         if (err.message.includes('ENotAuthorized')) {
             console.error(colors.yellow('Hint: Only the owner can remove collaborators.'));
         }
+        process.exit(1);
+    }
+}
+
+async function removeUserActionMantle(address: string, options: { repo?: string }, config: any) {
+    try {
+        let repoIdStr = options.repo || config.repo_id;
+
+        if (!repoIdStr) {
+            // eslint-disable-next-line no-console
+            console.error(colors.red('Error: Repository ID is required. Run inside a wit repo or use --repo <id>.'));
+            process.exit(1);
+        }
+
+        // Normalization
+        if (repoIdStr.startsWith('mantle:')) {
+            repoIdStr = repoIdStr.split(':').pop();
+        }
+
+        const repoId = BigInt(repoIdStr!);
+
+        // 2. Connect to Mantle
+        const signerCtx = await loadMantleSigner();
+        const repoService = new EvmRepoService(signerCtx);
+
+        // 3. Remove Collaborator
+        await repoService.removeCollaborator(repoId, address);
+
+    } catch (err: any) {
+        console.error(colors.red(`Command failed: ${err.message}`));
         process.exit(1);
     }
 }

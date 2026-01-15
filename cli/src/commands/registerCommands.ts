@@ -160,7 +160,8 @@ export function registerCommands(program: Command): void {
     .description('Add a collaborator to the repository')
     .option('--seal-policy <id>', 'Seal policy id to apply (defaults to repo config)')
     .option('--seal-secret <secret>', 'Seal secret to save locally when setting policy')
-    .action((address: string) => inviteAction(address));
+    .option('-r, --repo <repoId>', 'Repository ID (Mantle)')
+    .action(inviteAction);
 
   program
     .command('transfer <new_owner>')
@@ -170,6 +171,7 @@ export function registerCommands(program: Command): void {
   program
     .command('remove-user <address>')
     .description('Remove a collaborator from the repository')
+    .option('-r, --repo <repoId>', 'Repository ID (Mantle)')
     .action(removeUserAction);
 
   program
