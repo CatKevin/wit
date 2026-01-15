@@ -1,40 +1,80 @@
 import { useQuery } from '@tanstack/react-query';
 import { getCommit } from '@/lib/walrus';
+import { fetchMantleCommitHistory } from '@/lib/evm/fetchMantleRepo';
 import type { Commit, CommitWithId } from '@/lib/types';
 import { useEffect, useState } from 'react';
 
 /**
  * Hook to fetch commit history starting from a head commit ID
- * Recursively follows parent links up to maxDepth commits
- * 
- * Note: This implementation loads one commit at a time.
- * For better performance, we could batch fetch multiple commits,
- * but that would require knowing all parent IDs upfront.
+ * Support both Sui (recursive) and Mantle (batch)
  */
-export function useCommitHistory(headCommitId?: string, maxDepth: number = 50) {
+export function useCommitHistory(
+    headCommitId?: string,
+    maxDepth: number = 50,
+    chain: 'sui' | 'mantle' = 'sui'
+) {
     const [commits, setCommits] = useState<CommitWithId[]>([]);
-    const [currentId, setCurrentId] = useState<string | null>(headCommitId || null);
+
+    // ========================================================================
+    // Mantle Logic (Batch Fetch)
+    // ========================================================================
+    const { data: mantleHistory, isLoading: mantleLoading, error: mantleError } = useQuery({
+        queryKey: ['mantle-history', headCommitId],
+        queryFn: async () => {
+            if (!headCommitId) return [];
+            return fetchMantleCommitHistory(headCommitId, maxDepth);
+        },
+        enabled: chain === 'mantle' && !!headCommitId,
+    });
+
+    // Sync Mantle history to shared state
+    useEffect(() => {
+        if (chain === 'mantle' && mantleHistory) {
+            const mapped: CommitWithId[] = mantleHistory.map(item => ({
+                id: item.cid,
+                commit: {
+                    ...item,
+                    // Normalize tree if needed (RemoteCommit vs Commit)
+                    // They are compatible enough for display
+                } as unknown as Commit
+            }));
+            setCommits(mapped);
+        }
+    }, [mantleHistory, chain]);
+
+    // ========================================================================
+    // Sui Logic (Recursive Fetch)
+    // ========================================================================
+    const [currentId, setCurrentId] = useState<string | null>(null);
     const [isDone, setIsDone] = useState(false);
 
-    // Fetch current commit
-    const { data: currentCommit, isLoading, error } = useQuery<Commit>({
+    // Initial setup for Sui
+    useEffect(() => {
+        if (chain === 'sui') {
+            setCommits([]);
+            setCurrentId(headCommitId || null);
+            setIsDone(false);
+        }
+    }, [headCommitId, chain]);
+
+    // Fetch current commit (Sui)
+    const { data: currentCommit, isLoading: suiLoading, error: suiError } = useQuery<Commit>({
         queryKey: ['commit', currentId],
         queryFn: () => getCommit(currentId!),
-        enabled: !!currentId && !isDone,
+        enabled: chain === 'sui' && !!currentId && !isDone,
         staleTime: Infinity,
     });
 
-    // When we get a commit, add it to the list and move to next
+    // Recursive step for Sui
     useEffect(() => {
+        if (chain !== 'sui') return;
         if (!currentCommit || !currentId) return;
 
-        // Check if we already have this commit
         if (commits.some(c => c.id === currentId)) {
             setIsDone(true);
             return;
         }
 
-        // Add current commit to list
         const newCommit: CommitWithId = {
             id: currentId,
             commit: currentCommit,
@@ -42,27 +82,17 @@ export function useCommitHistory(headCommitId?: string, maxDepth: number = 50) {
 
         setCommits(prev => [...prev, newCommit]);
 
-        // Check if we should continue
         if (currentCommit.parent && commits.length < maxDepth - 1) {
-            // Move to parent
             setCurrentId(currentCommit.parent);
         } else {
-            // We're done
             setIsDone(true);
         }
-    }, [currentCommit, currentId, commits, maxDepth]);
-
-    // Reset when headCommitId changes
-    useEffect(() => {
-        setCommits([]);
-        setCurrentId(headCommitId || null);
-        setIsDone(false);
-    }, [headCommitId]);
+    }, [currentCommit, currentId, commits, maxDepth, chain]);
 
     return {
         commits,
-        isLoading: isLoading && commits.length === 0,
-        error,
-        hasMore: !isDone && !!currentId,
+        isLoading: chain === 'mantle' ? mantleLoading : (suiLoading && commits.length === 0),
+        error: chain === 'mantle' ? mantleError : suiError,
+        hasMore: chain === 'sui' ? (!isDone && !!currentId) : false,
     };
 }

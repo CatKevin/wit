@@ -3,20 +3,24 @@ import { useSuiClient, useSignTransaction, useCurrentAccount, useSignPersonalMes
 import { getBlobText, getFileFromQuiltAsText, getBlobArrayBuffer, getFileFromQuiltArrayBuffer } from '@/lib/walrus';
 import { decryptToText } from '@/lib/seal';
 
+import { fetchMantleFileContent } from '@/lib/evm/fetchMantleRepo';
+
 export interface FileRef {
     blobId?: string;
     quiltId?: string;
     identifier?: string;
+    chain?: 'sui' | 'mantle'; // Added chain property
     enc?: {
-        alg: 'seal-aes-256-gcm';
+        alg: 'seal-aes-256-gcm' | 'lit-aes-256-gcm'; // Added lit support in type
         iv: string;
         tag: string;
-        policy_id: string;
-        package_id: string;
-        sealed_session_key: string;
+        policy_id?: string;
+        package_id?: string;
+        sealed_session_key?: string;
         cipher_size?: number;
-        // Legacy/Fallback support if needed, but better to be strict
-        policy?: string;
+        // Lit params
+        lit_encrypted_key?: string;
+        access_control_conditions?: any;
     };
     policyId?: string;
 }
@@ -28,66 +32,61 @@ export function useFileContent(fileRef?: FileRef) {
     const account = useCurrentAccount();
 
     return useQuery({
-        queryKey: ['file', fileRef?.blobId, fileRef?.quiltId, fileRef?.identifier, fileRef?.enc?.iv],
+        queryKey: ['file', fileRef?.blobId, fileRef?.quiltId, fileRef?.identifier, fileRef?.chain, fileRef?.enc?.iv],
         queryFn: async () => {
-            console.log('[useFileContent] Starting with fileRef:', fileRef);
-            console.log('[useFileContent] SuiClient from hook:', !!suiClient);
-            console.log('[useFileContent] Account:', account?.address);
-
             if (!fileRef) throw new Error('No file reference provided');
 
-            // Check if suiClient is available
-            if (!suiClient) {
-                console.error('[useFileContent] SuiClient is null!');
-                throw new Error('SuiClient is not initialized. Please check your wallet connection.');
+            // Mantle Path
+            if (fileRef.chain === 'mantle') {
+                if (fileRef.blobId) {
+                    // TODO: Handle Lit encryption if fileRef.enc is present
+                    if (fileRef.enc) {
+                        console.warn('[useFileContent] Encrypted Mantle files not yet supported in web UI');
+                        return 'Encrypted content (Decryption not yet implemented in Web UI)';
+                    }
+                    return fetchMantleFileContent(fileRef.blobId);
+                }
+                throw new Error('Mantle files require a blobId (CID)');
             }
-            console.log('[useFileContent] SuiClient type:', typeof suiClient);
-            console.log('[useFileContent] SuiClient constructor:', suiClient?.constructor?.name);
+
+            // Sui Path (Existing Logic)
+            // ... (rest of the logic)
+            console.log('[useFileContent] Starting with fileRef:', fileRef);
+            console.log('[useFileContent] SuiClient from hook:', !!suiClient);
+            // ...
 
             // If it's a standalone blob
             if (fileRef.blobId) {
                 if (fileRef.enc) {
-                    console.log('[useFileContent] Encrypted blob detected');
                     if (!account) throw new Error('Wallet not connected');
-                    console.log('[useFileContent] Fetching blob array buffer...');
+                    // ... existing decryption logic
                     const buf = await getBlobArrayBuffer(fileRef.blobId);
-                    console.log('[useFileContent] Blob fetched, size:', buf.byteLength);
-                    console.log('[useFileContent] Calling decryptToText with suiClient:', !!suiClient);
                     return decryptToText(
                         buf,
-                        fileRef.enc,
+                        fileRef.enc as any, // Cast for compatibility
                         account,
                         (input) => signTransaction({ transaction: input.transaction as any }),
                         suiClient as any,
                         (input) => signPersonalMessage({ message: input.message, account })
                     );
                 }
-                console.log('[useFileContent] Fetching plain text blob');
                 return getBlobText(fileRef.blobId);
             }
 
             // If it's a file in a quilt
             if (fileRef.quiltId && fileRef.identifier) {
                 if (fileRef.enc) {
-                    console.log('[useFileContent] Encrypted quilt file detected');
-                    if (!account) {
-                        console.error('[useFileContent] No account - wallet not connected!');
-                        throw new Error('Please connect your wallet to view encrypted files. Only whitelisted addresses can decrypt this content.');
-                    }
-                    console.log('[useFileContent] Fetching quilt file array buffer...');
+                    if (!account) throw new Error('Wallet not connected');
                     const buf = await getFileFromQuiltArrayBuffer(fileRef.quiltId, fileRef.identifier);
-                    console.log('[useFileContent] Quilt file fetched, size:', buf.byteLength);
-                    console.log('[useFileContent] Calling decryptToText with suiClient:', !!suiClient);
                     return decryptToText(
                         buf,
-                        fileRef.enc,
+                        fileRef.enc as any,
                         account,
                         (input) => signTransaction({ transaction: input.transaction as any }),
                         suiClient as any,
                         (input) => signPersonalMessage({ message: input.message, account })
                     );
                 }
-                console.log('[useFileContent] Fetching plain text quilt file');
                 return getFileFromQuiltAsText(fileRef.quiltId, fileRef.identifier);
             }
 

@@ -20,12 +20,13 @@ export default function RepoDetail() {
     const queryClient = useQueryClient();
     const { data: repo, isLoading: repoLoading, error: repoError } = useRepository(id!);
     const [copied, setCopied] = useState(false);
+    const chain = repo?.chainType || 'sui';
 
     const [selectedFile, setSelectedFile] = useState<{ path: string; fileRef: FileRef } | null>(null);
     const [selectedCommit, setSelectedCommit] = useState<any>(null);
 
-    const { data: manifest, isLoading: manifestLoading, error: manifestError } = useManifest(repo?.headManifest);
-    const { commits, isLoading: commitsLoading, error: commitsError } = useCommitHistory(repo?.headCommit);
+    const { data: manifest, isLoading: manifestLoading, error: manifestError } = useManifest(repo?.headManifest, chain);
+    const { commits, isLoading: commitsLoading, error: commitsError } = useCommitHistory(repo?.headCommit, 50, chain);
     const { data: fileContent, isLoading: fileLoading, error: fileError } = useFileContent(selectedFile?.fileRef);
 
     const handleCopy = () => {
@@ -205,18 +206,30 @@ export default function RepoDetail() {
                                             <FileTree
                                                 manifest={manifest}
                                                 onSelectFile={(path, meta) => {
-                                                    // Get policy ID for Sui repos (seal_policy_id) or undefined for Mantle
                                                     const policyId = repo.seal_policy_id || undefined;
 
-                                                    if (meta?.blob_ref) {
-                                                        setSelectedFile({ path, fileRef: { blobId: meta.blob_ref, enc: meta.enc as any, policyId } });
-                                                    } else if (manifest.quilt_id) {
+                                                    if (chain === 'mantle') {
                                                         setSelectedFile({
                                                             path,
-                                                            fileRef: { quiltId: manifest.quilt_id, identifier: path, enc: meta.enc as any, policyId },
+                                                            fileRef: {
+                                                                blobId: meta.cid || meta.hash,
+                                                                identifier: path,
+                                                                enc: meta.enc as any,
+                                                                chain: 'mantle'
+                                                            }
+                                                        });
+                                                        return;
+                                                    }
+
+                                                    if (meta?.blob_ref) {
+                                                        setSelectedFile({ path, fileRef: { blobId: meta.blob_ref, enc: meta.enc as any, policyId, chain: 'sui' } });
+                                                    } else if ((manifest as any)?.quilt_id) {
+                                                        setSelectedFile({
+                                                            path,
+                                                            fileRef: { quiltId: (manifest as any).quilt_id, identifier: path, enc: meta.enc as any, policyId, chain: 'sui' },
                                                         });
                                                     } else {
-                                                        setSelectedFile({ path, fileRef: { blobId: meta.hash, enc: meta.enc as any, policyId } });
+                                                        setSelectedFile({ path, fileRef: { blobId: meta.hash, enc: meta.enc as any, policyId, chain: 'sui' } });
                                                     }
                                                 }}
                                                 selectedPath={selectedFile?.path}

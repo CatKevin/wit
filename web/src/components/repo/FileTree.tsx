@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, File, Folder, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Manifest } from '@/lib/walrus';
+
 
 interface FileTreeNode {
     name: string;
@@ -18,12 +18,23 @@ interface FileTreeNode {
 }
 
 interface FileTreeProps {
-    manifest: Manifest;
-    onSelectFile: (path: string, meta: Manifest['files'][string]) => void;
+    manifest: {
+        files: Record<string, {
+            hash: string;
+            size: number;
+            mode: string;
+            blob_ref?: string;
+            id?: string;
+            cid?: string;
+            enc?: any;
+        }>;
+        version?: number;
+    };
+    onSelectFile: (path: string, meta: any) => void;
     selectedPath?: string;
 }
 
-function buildTree(manifest: Manifest): FileTreeNode[] {
+function buildTree(manifest: FileTreeProps['manifest']): FileTreeNode[] {
     const root: FileTreeNode[] = [];
     const map: Record<string, FileTreeNode> = {};
 
