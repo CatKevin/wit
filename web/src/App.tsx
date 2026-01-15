@@ -1,28 +1,75 @@
 import { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
-import { NetworkSelector } from '@/components/layout/NetworkSelector';
+// ============================================================================
+// Sui Imports - PRESERVED for future multi-chain support
+// These imports are intentionally kept but UI components are hidden
+// To re-enable: uncomment JSX below and remove underscore prefixes
+// ============================================================================
+import { ConnectButton as _SuiConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
+// NetworkSelector component preserved but not rendered in MVP
+import { NetworkSelector as _NetworkSelector } from '@/components/layout/NetworkSelector';
+
+// ============================================================================
+// Mantle/EVM Imports - Active in MVP
+// ============================================================================
+import { EvmConnectButtonCompact } from '@/components/EvmConnectButton';
+import { useEvmAccount } from '@/hooks/useEvmAccount';
+import { ChainProvider, useChainContext } from '@/hooks/useChainContext';
+
 import Home from '@/pages/Home';
 import RepoDetail from '@/pages/RepoDetail';
 import CommitDetailPage from '@/pages/CommitDetailPage';
 import logo from '@/assets/logo.png';
 import { Github } from 'lucide-react';
 
-// Protected route component - redirects to home if wallet not connected
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const account = useCurrentAccount();
+// ============================================================================
+// Protected Route Component
+// ============================================================================
 
-  if (!account) {
+/**
+ * ProtectedRoute - Redirects to home if wallet not connected
+ * 
+ * MVP: Uses EVM account (thirdweb)
+ * Future: Check based on chainType (Sui or EVM)
+ */
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  // Sui account - PRESERVED for future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const suiAccount = useCurrentAccount();
+
+  // EVM account - Active in MVP
+  const { isConnected: evmConnected } = useEvmAccount();
+  const { isMantle } = useChainContext();
+
+  // MVP: Only check EVM connection since we're Mantle-only
+  // Future: Check based on chainType
+  const isAuthenticated = isMantle ? evmConnected : !!suiAccount;
+
+  if (!isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
 }
 
+// ============================================================================
+// App Content
+// ============================================================================
+
 function AppContent() {
   const location = useLocation();
-  const account = useCurrentAccount();
-  const isLandingPage = location.pathname === '/' && !account;
+
+  // Sui account - PRESERVED for future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const suiAccount = useCurrentAccount();
+
+  // EVM account - Active in MVP
+  const { isConnected: evmConnected } = useEvmAccount();
+  const { isMantle } = useChainContext();
+
+  // Check if user is connected (based on current chain type)
+  const isConnected = isMantle ? evmConnected : !!suiAccount;
+  const isLandingPage = location.pathname === '/' && !isConnected;
 
   useEffect(() => {
     let scrollTimeout: ReturnType<typeof setTimeout>;
@@ -64,14 +111,27 @@ function AppContent() {
               <span>GitHub</span>
             </a>
 
-            {/* Network Selector - 更简洁的设计 */}
-            <div className="hidden sm:block">
+            {/* ============================================================ */}
+            {/* Network Selector - HIDDEN in MVP, preserved for future use   */}
+            {/* Uncomment below to re-enable Sui network selection           */}
+            {/* ============================================================ */}
+            {/* <div className="hidden sm:block">
               <NetworkSelector />
-            </div>
+            </div> */}
 
-            {/* Connect Button - 自定义包装 */}
+            {/* ============================================================ */}
+            {/* Sui Connect Button - HIDDEN in MVP, preserved for future use */}
+            {/* Uncomment below to re-enable Sui wallet connection           */}
+            {/* ============================================================ */}
+            {/* <div className="connect-button-wrapper">
+              <SuiConnectButton />
+            </div> */}
+
+            {/* ============================================================ */}
+            {/* EVM Connect Button - Active in MVP (Mantle only)             */}
+            {/* ============================================================ */}
             <div className="connect-button-wrapper">
-              <ConnectButton />
+              <EvmConnectButtonCompact />
             </div>
           </div>
         </div>
@@ -96,11 +156,17 @@ function AppContent() {
   );
 }
 
+// ============================================================================
+// App Root
+// ============================================================================
+
 function App() {
   return (
-    <Router>
-      <AppContent />
-    </Router>
+    <ChainProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </ChainProvider>
   );
 }
 
