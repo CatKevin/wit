@@ -2,7 +2,6 @@
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { LIT_NETWORK, LIT_ABILITY } from "@lit-protocol/constants";
 import { LitAccessControlConditionResource, LitActionResource, generateAuthSig, createSiweMessageWithResources } from "@lit-protocol/auth-helpers";
-// Removed non-existent import
 import { encryptString, decryptToString } from "@lit-protocol/encryption";
 import * as dotenv from 'dotenv';
 import path from 'path';
@@ -22,20 +21,15 @@ import { loadEvmKey } from '../src/lib/evmKeys';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const PLATFORM_PRIVATE_KEY = process.env.LIT_PLATFORM_PRIVATE_KEY;
-const CAPACITY_TOKEN_ID = "369618"; // Hardcoded from mint script result
+const CAPACITY_TOKEN_ID = "369618";
 
 if (!PLATFORM_PRIVATE_KEY) {
     console.error("❌ LIT_PLATFORM_PRIVATE_KEY not found in .env");
     process.exit(1);
 }
 
-// ⚠️ Ensure this address has access in your Mantle contract
-// For this demo, we assume the Lit Action just returns true or checks a permissive condition
-// If specific user is needed, replace this.
-// Use Qma... CID (V0) because Lit Nodes hash the content to V0/Identity when checking access.
-// Passing baf... (V1) causes "Hash mismatch" error.
-const LIT_ACTION_IPFS_CID = "Qma8FtFLwvYxBBfgUDy9z1ShCBJJvJqaxBbg9w9aKpEgVF";
-const MANTLE_CONTRACT = "0xf5db3fb6c5C94348dB6Ab32236f16002514ff4F9";
+// Mantle Mainnet Contract
+const MANTLE_CONTRACT = "0x5D8D666dAbf73d705BD59A02227c57d2362a11e7";
 const REPO_ID = "1";
 
 async function main() {
@@ -76,10 +70,6 @@ async function main() {
         {
             resource: new LitAccessControlConditionResource('*'),
             ability: LIT_ABILITY.AccessControlConditionDecryption,
-        },
-        {
-            resource: new LitActionResource('*'),
-            ability: LIT_ABILITY.LitActionExecution,
         }
     ];
 
@@ -89,7 +79,6 @@ async function main() {
         capabilityAuthSigs: [capacityDelegationAuthSig],
         resourceAbilityRequests: resourceAbilities as any,
         authNeededCallback: async (params: any) => {
-            console.log("DEBUG: resourceAbilityRequests:", JSON.stringify(params.resourceAbilityRequests, null, 2));
             const toSign = await createSiweMessageWithResources({
                 uri: params.uri,
                 expiration: params.expiration,
@@ -106,30 +95,47 @@ async function main() {
     });
 
     // --- 4. Encrypt ---
-    const secretCode = "console.log('Deploying to Mantle 5003...');";
+    const secretCode = "console.log('Hello Mantle Mainnet from Lit!');";
     console.log(`\n🔒 Encrypting: "${secretCode}"`);
 
-    const accessControlConditions = [
+    // Docs say for Custom Contract:
+    // conditionType: 'evmContract' (Required if not basic 20/721/1155)
+    // contractAddress: Address
+    // functionName: Name of function
+    // functionParams: Array of params
+    // functionAbi: The ABI object for the function
+    // chain: Chain string
+
+    const unifiedAccessControlConditions = [
         {
-            contractAddress: `ipfs://${LIT_ACTION_IPFS_CID}`,
-            standardContractType: "LitAction",
-            chain: "ethereum",
-            method: "go",
-            parameters: [
-                REPO_ID,
-                MANTLE_CONTRACT,
-                userWallet.address // Using random wallet, adjust Lit Action logic if it checks strict allowlist
-            ],
-            returnValueTest: {
-                comparator: "=",
-                value: "true",
+            conditionType: 'evmContract',
+            contractAddress: MANTLE_CONTRACT,
+            functionName: 'hasAccess',
+            functionParams: [REPO_ID, ':userAddress'],
+            functionAbi: {
+                name: "hasAccess",
+                type: "function",
+                stateMutability: "view",
+                inputs: [
+                    { name: "repoId", type: "uint256" },
+                    { name: "user", type: "address" }
+                ],
+                outputs: [
+                    { name: "", type: "bool" }
+                ]
             },
-        },
+            chain: 'mantle',
+            returnValueTest: {
+                key: '', // Empty key means check the return value itself
+                comparator: '=',
+                value: 'true'
+            }
+        }
     ];
 
     const { ciphertext, dataToEncryptHash } = await encryptString(
         {
-            accessControlConditions,
+            unifiedAccessControlConditions,
             dataToEncrypt: secretCode,
         },
         client
@@ -139,16 +145,16 @@ async function main() {
     console.log(`🔑 DataHash: ${dataToEncryptHash}`);
 
     // --- 5. Decrypt ---
-    console.log("\n🔓 Decrypting (Verifying Mantle Contract)...");
+    console.log("\n🔓 Decrypting (Direct Mantle Check)...");
 
     try {
         const decryptedString = await decryptToString(
             {
-                accessControlConditions,
+                unifiedAccessControlConditions,
                 ciphertext,
                 dataToEncryptHash,
                 sessionSigs,
-                chain: "ethereum",
+                chain: "mantle",
             },
             client
         );
@@ -157,11 +163,6 @@ async function main() {
     } catch (e: any) {
         console.error("❌ Decryption Failed!");
         console.error("Reason:", e.message || e);
-
-        // Dump logs if available in error
-        if (e.logs) {
-            console.log("Lit Action Logs:", e.logs);
-        }
     }
 
     client.disconnect();
