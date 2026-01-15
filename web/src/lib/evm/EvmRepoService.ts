@@ -264,6 +264,46 @@ async function fetchLogsFromBlockscout(
 }
 
 /**
+ * Fetch logs with backward pagination (chunking) to avoid RPC timeouts
+ */
+async function fetchLogsBackwards(
+    client: any,
+    address: `0x${string}`,
+    event: any,
+    args: any,
+    fromBlock: bigint
+) {
+    const latest = await client.getBlockNumber();
+    let currentTo = latest;
+    const CHUNK_SIZE = 50000n; // Safe chunk size for Mantle
+    const allLogs = [];
+
+    // Max block range safeguard for backward query
+    while (currentTo > fromBlock) {
+        const currentFrom = currentTo - CHUNK_SIZE > fromBlock
+            ? currentTo - CHUNK_SIZE
+            : fromBlock;
+
+        try {
+            const logs = await client.getLogs({
+                address,
+                event,
+                args,
+                fromBlock: currentFrom,
+                toBlock: currentTo
+            });
+            allLogs.push(...logs);
+        } catch (e) {
+            console.warn(`[EvmRepoService] Chunk query failed ${currentFrom}-${currentTo}, skipping chunk...`, e);
+        }
+
+        currentTo = currentFrom - 1n;
+    }
+
+    return allLogs;
+}
+
+/**
  * Fetch all repositories where user is owner or collaborator
  * Uses RPC getLogs to query contract events directly, with fallback to Blockscout API
  */
@@ -336,32 +376,14 @@ export async function fetchUserRepositories(
     };
 
     try {
-        // Attempt 1: RPC Query
-        console.log('[EvmRepoService] Fetching via RPC...');
+        // Attempt 1: RPC Query with Backward Pagination
+        console.log('[EvmRepoService] Fetching via RPC (Paged)...');
         const startBlock = chainId === MANTLE_MAINNET_CHAIN_ID ? 90164800n : 0n;
 
         const [createdLogs, addedLogs, removedLogs] = await Promise.all([
-            client.getLogs({
-                address: contractAddress,
-                event: eventAbis[0],
-                args: { owner: userAddress as `0x${string}` },
-                fromBlock: startBlock,
-                toBlock: 'latest',
-            }),
-            client.getLogs({
-                address: contractAddress,
-                event: eventAbis[1],
-                args: { user: userAddress as `0x${string}` },
-                fromBlock: startBlock,
-                toBlock: 'latest',
-            }),
-            client.getLogs({
-                address: contractAddress,
-                event: eventAbis[2],
-                args: { user: userAddress as `0x${string}` },
-                fromBlock: startBlock,
-                toBlock: 'latest',
-            })
+            fetchLogsBackwards(client, contractAddress, eventAbis[0], { owner: userAddress as `0x${string}` }, startBlock),
+            fetchLogsBackwards(client, contractAddress, eventAbis[1], { user: userAddress as `0x${string}` }, startBlock),
+            fetchLogsBackwards(client, contractAddress, eventAbis[2], { user: userAddress as `0x${string}` }, startBlock)
         ]);
 
         processLogs(createdLogs, addedLogs, removedLogs, true);
