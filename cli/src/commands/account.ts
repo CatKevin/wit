@@ -116,6 +116,12 @@ export async function accountGenerateAction(opts: { alias?: string }): Promise<v
       await maybeUpdateRepoAuthor(address, activeChain);
       // eslint-disable-next-line no-console
       console.log(`Generated new account ${colors.hash(address)} (${alias}) and set as active.`);
+      // eslint-disable-next-line no-console
+      console.log(colors.yellow(`\n👉 Important: This is a Mantle Mainnet wallet.`));
+      // eslint-disable-next-line no-console
+      console.log(colors.yellow(`   You MUST fund this address with MNT tokens to perform ANY operations (push, create-repo, etc).`));
+      // eslint-disable-next-line no-console
+      console.log(colors.yellow(`   Address: ${address}`));
     } else if (activeChain === 'sui') {
       const { address } = await createSigner(alias);
       await maybeUpdateRepoAuthor(address, activeChain);
