@@ -123,7 +123,6 @@ export async function cloneFromMantle(repoIdStr: string, destDir: string = proce
 
                 try {
                     const acc = encMeta.unified_access_control_conditions || encMeta.access_control_conditions;
-                    console.log("[DEBUG] Decrypting with conditions:", JSON.stringify(acc));
                     const sessionKey = await litService.decryptSessionKey(
                         encMeta.lit_encrypted_key,
                         encMeta.lit_hash,
@@ -141,12 +140,25 @@ export async function cloneFromMantle(repoIdStr: string, destDir: string = proce
                         sessionKey
                     );
                 } catch (err: any) {
-                    // eslint-disable-next-line no-console
-                    console.error(colors.red(`  ❌ Failed to decrypt ${rel}: ${err.message}`));
-                    if (err.message.includes('not authorized')) {
-                        throw new Error(`Access Denied: You are not authorized to view ${rel}.`);
+                    // Check for Lit Access Denied
+                    const msg = err.message || '';
+                    if (
+                        msg.includes('NodeAccessControlConditionsReturnedNotAuthorized') ||
+                        msg.includes('not authorized') ||
+                        (err.errorKind === 'Validation' && err.errorCode === 'NodeAccessControlConditionsReturnedNotAuthorized')
+                    ) {
+                        // eslint-disable-next-line no-console
+                        console.log(colors.red(`❌ Access Denied: You do not have permission to decrypt this file.`));
+                        // eslint-disable-next-line no-console
+                        console.log(colors.yellow(`   Please contact the repository owner to add your address to the allowlist.`));
+                        // eslint-disable-next-line no-console
+                        console.log(colors.gray(`   Repository ID: ${repoIdHex}`));
+                        process.exit(1);
                     }
-                    throw err;
+
+                    // eslint-disable-next-line no-console
+                    console.error(colors.red(`  ❌ Failed to decrypt ${rel}: ${msg}`));
+                    process.exit(1);
                 }
             }
         }

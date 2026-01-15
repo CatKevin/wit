@@ -151,8 +151,6 @@ export class LitService {
     ): Promise<Buffer> {
         await this.connect();
 
-        console.log("[DEBUG] LitService.decryptSessionKey called with UACC:", JSON.stringify(unifiedAccessControlConditions));
-
         const decryptedString = await this.litNodeClient.decrypt({
             ciphertext,
             dataToEncryptHash,
