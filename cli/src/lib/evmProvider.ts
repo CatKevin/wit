@@ -40,7 +40,7 @@ const DEFAULT_CHAIN_NAMES: Record<EvmNetwork, string> = {
 };
 
 export function resolveMantleNetwork(input?: string | null): EvmNetwork {
-  return input === 'mainnet' ? 'mainnet' : 'testnet';
+  return input === 'testnet' ? 'testnet' : 'mainnet';
 }
 
 export function resolveMantleRpcUrl(network: EvmNetwork): string {

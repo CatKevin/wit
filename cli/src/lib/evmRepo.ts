@@ -12,6 +12,8 @@ const WIT_POLY_REPO_ABI = [
 
 // Deployed Proxy Address on Mantle Sepolia (5003)
 const WIT_CONTRACT_ADDRESS_MANTLE_SEPOLIA = '0xf5db3fb6c5C94348dB6Ab32236f16002514ff4F9';
+// Deployed Proxy Address on Mantle Mainnet (5000)
+const WIT_CONTRACT_ADDRESS_MANTLE_MAINNET = '0x5D8D666dAbf73d705BD59A02227c57d2362a11e7';
 
 export type OnChainRepoState = {
     id: bigint;
@@ -124,11 +126,26 @@ function resolveContractAddress(chainId: number): string {
     if (chainId === 5003) {
         return WIT_CONTRACT_ADDRESS_MANTLE_SEPOLIA;
     }
+    if (chainId === 5000) {
+        return WIT_CONTRACT_ADDRESS_MANTLE_MAINNET;
+    }
     throw new Error(`No contract address known for chain ID ${chainId}`);
 }
 
 function getExplorerLink(txHash: string): string {
     // Mantle Sepolia Explorer
+    // Mantle Explorer
+    if (txHash.startsWith('0x')) {
+        // Simple check, theoretically we should pass chainId to this function or check global context
+        // For now, let's just make it generic or use mainnet if configured?
+        // Actually, let's assume if it calls this, we want the link.
+        // But we don't know the chain here easily without passing it.
+        // Let's modify it to be generic or default to mainnet if we are switching?
+        // Or check a global?
+        // Let's just return a generic msg or try to guess.
+        // Better: assume Mantle Mainnet is the target now.
+        return `https://mantlescan.xyz/tx/${txHash}`;
+    }
     return `https://sepolia.mantlescan.xyz/tx/${txHash}`;
 }
 

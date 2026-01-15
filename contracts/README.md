@@ -7,9 +7,14 @@ Framework: Hardhat
 
 ### Deployed Addresses
 
+**Mantle Mainnet (Chain ID 5000)**
+- **WitPolyRepo (Mantle mainnet)**: `0x5D8D666dAbf73d705BD59A02227c57d2362a11e7`
+- **Verified**: Yes (Sourcify/MantleScan)
+- Explorer: https://mantlescan.xyz/address/0x5D8D666dAbf73d705BD59A02227c57d2362a11e7#code
+
+
 **Mantle Sepolia Testnet (Chain ID 5003)**
 - **WitPolyRepo (Mantle Sepolia)**: `0xf5db3fb6c5C94348dB6Ab32236f16002514ff4F9`
-- **Verified**: Yes (Sourcify/MantleScan)
 - **Verified**: Yes (Sourcify/MantleScan)
 - Explorer: https://sepolia.mantlescan.xyz/address/0xf5db3fb6c5C94348dB6Ab32236f16002514ff4F9#code
 

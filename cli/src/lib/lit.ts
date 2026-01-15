@@ -11,7 +11,7 @@ export const LIT_NETWORK = 'datil-test';
 export const LIT_ACTION_CODE = `
 (async () => {
     // --- Configuration ---
-    const RPC_URL = "https://rpc.sepolia.mantle.xyz";
+    const RPC_URL = "https://rpc.mantle.xyz";
   
     // 1. Get params from accessControlConditions
     const _cond = accessControlConditions.find(c => c.standardContractType === "LitAction");
@@ -45,7 +45,7 @@ export const LIT_ACTION_CODE = `
 })();
 `;
 
-export const LIT_ACTION_CID = 'bafkreibojoz4mvdp6zw4ezgsk7olt6l6jr5e6yqjaltjttaayfjwbhlz34';
+export const LIT_ACTION_CID = 'bafkreibbq3fltufjarcmk45426mhhssky5izkjuxio7im26q6lxlf2qbda';
 
 export interface LitInitConfig {
     debug?: boolean;
@@ -177,7 +177,7 @@ export class LitService {
         const origin = 'https://localhost/login';
         const statement = 'Sign in to Wit CLI to decrypt repository data.';
         const now = new Date().toISOString();
-        const chainId = 5003; // Mantle Sepolia, though Lit often defaults to 1 for SIWE checks unless specified.
+        const chainId = 5000; // Mantle Mainnet
 
         // Construct SIWE Message (EIP-4361)
         // Note: Newlines (\n) are critical.

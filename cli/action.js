@@ -1,7 +1,7 @@
 
 (async () => {
     // --- Configuration ---
-    const RPC_URL = "https://rpc.sepolia.mantle.xyz";
+    const RPC_URL = "https://rpc.mantle.xyz";
 
     // 1. Get params from accessControlConditions
     // We expect the parameters in this order: [repoId, contractAddress, userAddress]
