@@ -101,23 +101,27 @@ export async function fetchMantleCommitHistory(headCid: string, maxDepth: number
     const visited = new Set<string>();
 
     while (currentCid && depth < maxDepth) {
-        if (visited.has(currentCid)) break; // Cycle detection
+        if (visited.has(currentCid)) {
+            console.warn(`[fetchMantleCommitHistory] Cycle detected at ${currentCid}`);
+            break;
+        }
         visited.add(currentCid);
 
-        console.log(`[fetchMantleCommitHistory] Fetching commit ${currentCid} (depth ${depth})`);
+        console.log(`[fetchMantleCommitHistory] [Depth ${depth}] Fetching commit ${currentCid}`);
         const commit = await fetchMantleCommit(currentCid);
 
         if (!commit) {
-            console.warn(`[fetchMantleCommitHistory] Failed to fetch commit ${currentCid}`);
+            console.error(`[fetchMantleCommitHistory] Failed to fetch commit ${currentCid} - stopping traversal.`);
             break;
         }
 
         history.push({ ...commit, cid: currentCid });
 
         if (commit.parent && commit.parent !== '') {
+            console.log(`[fetchMantleCommitHistory] Found parent ${commit.parent}`);
             currentCid = commit.parent;
         } else {
-            console.log(`[fetchMantleCommitHistory] End of history at ${currentCid}`);
+            console.log(`[fetchMantleCommitHistory] End of history at ${currentCid} (parent is '${commit.parent}')`);
             currentCid = null;
         }
         depth++;
