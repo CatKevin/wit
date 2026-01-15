@@ -8,7 +8,7 @@ import { downloadFromLighthouseGateway } from './lighthouse';
 import { ManifestSchema, type Manifest } from './schema';
 import { decryptBuffer } from './crypto';
 import { ensureDirForFile, writeIndex, type Index } from './fs';
-import { writeRepoConfig } from './repo';
+import { writeRepoConfig, writeRemoteRef, writeRemoteState } from './repo';
 
 type RemoteCommit = {
     tree: {
@@ -183,9 +183,10 @@ export async function cloneFromMantle(repoIdStr: string, destDir: string = proce
         head_commit: head.headCommit,
         head_manifest: manifestCid,
         head_quilt: '', // Not used for EVM currently
-        version: head.version,
+        version: Number(head.version),
     };
-    await fs.writeFile(path.join(witPath, 'state.json'), JSON.stringify({ ...remoteState, version: remoteState.version.toString() }, null, 2));
+    await writeRemoteState(witPath, remoteState);
+    await writeRemoteRef(witPath, head.headCommit);
 
     // eslint-disable-next-line no-console
     console.log(colors.green(`Clone complete.`));
@@ -195,6 +196,15 @@ export async function cloneFromMantle(repoIdStr: string, destDir: string = proce
     }
 
     await litService.disconnect();
+
+    // 6. Download History (Commit Chain)
+    // We need to initialize the commit map first
+    const map = {}; // fresh clone
+    await downloadCommitChainMantle(head.headCommit, witPath, map);
+    // Write map
+    const mapFile = path.join(witPath, 'objects', 'maps', 'commit_id_map.json');
+    await ensureDirForFile(mapFile);
+    await fs.writeFile(mapFile, JSON.stringify(map, null, 2) + '\n', 'utf8');
 }
 
 async function downloadBuffer(cid: string): Promise<Buffer> {
@@ -243,4 +253,66 @@ async function ensureEvmLayout(cwd: string, repoId: string): Promise<string> {
 
     await writeRepoConfig(witPath, cfg as any);
     return witPath;
+}
+
+export async function downloadCommitChainMantle(
+    startId: string,
+    witPath: string,
+    map: Record<string, string | null>
+): Promise<void> {
+    const seen = new Set<string>();
+    let current: string | null = startId;
+
+    while (current && !seen.has(current)) {
+        seen.add(current);
+
+        // Check if we already have it locally
+        if (map[current]) {
+            break;
+        }
+
+        let commitBuf: Buffer;
+        const cachedPath = path.join(witPath, 'objects', 'commits', `${idToFileName(current)}.json`);
+        try {
+            const raw = await fs.readFile(cachedPath, 'utf8');
+            commitBuf = Buffer.from(raw, 'utf8');
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.log(colors.gray(`Downloading commit ${current}...`));
+            commitBuf = await downloadBuffer(current);
+            await ensureDirForFile(cachedPath);
+            await fs.writeFile(cachedPath, commitBuf.toString('utf8'), 'utf8');
+        }
+
+        let commit: RemoteCommit;
+        try {
+            commit = JSON.parse(commitBuf.toString('utf8')) as RemoteCommit;
+        } catch {
+            throw new Error(`Invalid commit JSON for ${current}`);
+        }
+
+        map[current] = current;
+
+        // Also ensure manifest is present
+        const manifestCid = commit.tree.manifest_cid || commit.tree.manifest_id;
+        if (manifestCid) {
+            const mPath = path.join(witPath, 'objects', 'manifests', `${idToFileName(manifestCid)}.json`);
+            try {
+                await fs.access(mPath);
+            } catch {
+                // eslint-disable-next-line no-console
+                console.log(colors.gray(`Downloading manifest ${manifestCid}...`));
+                const mBuf = await downloadBuffer(manifestCid);
+                await ensureDirForFile(mPath);
+                await fs.writeFile(mPath, mBuf.toString('utf8'), 'utf8');
+            }
+        }
+
+        current = commit.parent;
+    }
+}
+
+// Helper needed for ID mapping locally if not imported
+function idToFileName(id: string): string {
+    return id.replace(/\//g, '_').replace(/\+/g, '-');
 }

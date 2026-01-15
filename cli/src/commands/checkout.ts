@@ -19,6 +19,10 @@ import { sha256Base64 } from '../lib/serialize';
 import { readRepoConfig, resolveSuiSealPolicyId } from '../lib/repo';
 import { decryptWithSeal } from '../lib/seal';
 import { loadSigner } from '../lib/keys';
+import { LitService } from '../lib/lit';
+import { decryptBuffer } from '../lib/crypto';
+import { downloadFromLighthouseGateway } from '../lib/lighthouse';
+import { loadMantleSigner } from '../lib/evmProvider';
 
 const WIT_DIR = '.wit';
 
@@ -27,7 +31,7 @@ export async function checkoutAction(commitId: string): Promise<boolean> {
   const repoCfg = await readRepoConfig(witPath);
   const commit = await readCommitById(witPath, commitId);
   const sealPolicyId = resolveSuiSealPolicyId(repoCfg);
-  const files = await resolveFilesForCommit(witPath, commit, sealPolicyId);
+  const files = await resolveFilesForCommit(witPath, commit, sealPolicyId, repoCfg);
   if (!files) {
     // Friendly message already printed inside resolveFilesForCommit/ensureBlobsFromManifest
     // eslint-disable-next-line no-console
@@ -95,11 +99,11 @@ function safeJoin(base: string, rel: string): string {
   return path.join(base, norm);
 }
 
-async function resolveFilesForCommit(witPath: string, commit: any, sealPolicyId: string | null): Promise<Index | null> {
+async function resolveFilesForCommit(witPath: string, commit: any, sealPolicyId: string | null, repoCfg: any): Promise<Index | null> {
   if (commit.tree?.files && Object.keys(commit.tree.files).length) {
     return commit.tree.files as Index;
   }
-  const manifestId = commit.tree?.manifest_id;
+  const manifestId = commit.tree?.manifest_id || commit.tree?.manifest_cid;
   if (!manifestId) {
     throw new Error('Commit has no file list or manifest_id; cannot checkout.');
   }
@@ -115,7 +119,7 @@ async function resolveFilesForCommit(witPath: string, commit: any, sealPolicyId:
   if (computedRoot !== commit.tree.root_hash) {
     throw new Error('Commit root_hash does not match manifest.');
   }
-  const ok = await ensureBlobsFromManifest(witPath, manifest, sealPolicyId);
+  const ok = await ensureBlobsFromManifest(witPath, manifest, sealPolicyId, repoCfg);
   if (!ok) {
     return null;
   }
@@ -131,17 +135,36 @@ async function loadManifest(witPath: string, manifestId: string) {
     if (err?.code !== 'ENOENT') throw err;
   }
   // fetch from walrus
-  const walrusSvc = await WalrusService.fromRepo();
-  // eslint-disable-next-line no-console
-  console.log(colors.cyan(`Fetching manifest ${manifestId} from Walrus...`));
-  const buf = Buffer.from(await walrusSvc.readBlob(manifestId));
+  // fetch from walrus or lighthouse
+  let buf: Buffer;
+  try {
+    const walrusSvc = await WalrusService.fromRepo();
+    // eslint-disable-next-line no-console
+    console.log(colors.cyan(`Fetching manifest ${manifestId} from Walrus...`));
+    buf = Buffer.from(await walrusSvc.readBlob(manifestId));
+  } catch (err) {
+    // If Walrus fails or not configured, try Lighthouse (Mantle fallback)
+    // eslint-disable-next-line no-console
+    console.log(colors.cyan(`Fetching manifest ${manifestId} from Lighthouse...`));
+    const res = await downloadFromLighthouseGateway(manifestId, { verify: false });
+    buf = Buffer.from(res.bytes);
+  }
+
   const manifest = ManifestSchema.parse(JSON.parse(buf.toString('utf8')));
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, buf.toString('utf8'), 'utf8');
   return manifest;
 }
 
-async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolicyId: string | null): Promise<boolean> {
+async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolicyId: string | null, repoCfg: any): Promise<boolean> {
+  if (repoCfg.chain === 'mantle') {
+    return ensureBlobsMantle(witPath, manifest, repoCfg);
+  } else {
+    return ensureBlobsSui(witPath, manifest, sealPolicyId);
+  }
+}
+
+async function ensureBlobsSui(witPath: string, manifest: any, sealPolicyId: string | null): Promise<boolean> {
   const entries = Object.entries(manifest.files) as [string, any][];
   const missing: { rel: string; meta: any }[] = [];
   for (const [rel, meta] of entries) {
@@ -151,11 +174,16 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolic
     }
   }
   if (!missing.length) return true;
-  const walrusSvc = await WalrusService.fromRepo();
+
   // eslint-disable-next-line no-console
   console.log(colors.cyan(`Fetching ${missing.length} missing blobs from Walrus...`));
 
-  // Setup for decryption if needed
+  let walrusSvc: WalrusService | null = null;
+  try {
+    walrusSvc = await WalrusService.fromRepo();
+  } catch { }
+
+  // Setup for decryption
   let signerInfo: any = null;
   let suiClient: SuiClient | null = null;
 
@@ -167,8 +195,10 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolic
   }
 
   for (const { rel, meta } of missing) {
+    if (!walrusSvc) throw new Error('Walrus service not initialized');
     const data = await fetchFileBytes(walrusSvc, manifest, rel, meta);
-    let plain: Buffer;
+
+    let plain: Buffer = data;
     try {
       if (meta.enc) {
         if (!signerInfo || !suiClient) {
@@ -184,16 +214,10 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolic
           tag: encAny.tag || encAny.enc_tag,
         };
         plain = await decryptWithSeal(data, encMeta as any, signerInfo.signer, suiClient);
-      } else {
-        plain = data;
       }
     } catch (err: any) {
       // eslint-disable-next-line no-console
-      console.log(
-        colors.red(
-          `Seal decryption failed for ${rel}. Check if you are whitelisted.`
-        )
-      );
+      console.log(colors.red(`❌ Access Denied or Decryption Failed for ${rel}: ${err.message}`));
       return false;
     }
     const hash = sha256Base64(plain);
@@ -204,6 +228,107 @@ async function ensureBlobsFromManifest(witPath: string, manifest: any, sealPolic
     await ensureDirForFile(blobPath);
     await fs.writeFile(blobPath, plain);
   }
+  return true;
+}
+
+async function ensureBlobsMantle(witPath: string, manifest: any, repoCfg: any): Promise<boolean> {
+  const entries = Object.entries(manifest.files) as [string, any][];
+  const missing: { rel: string; meta: any }[] = [];
+  for (const [rel, meta] of entries) {
+    const buf = await readBlob(witPath, meta.hash);
+    if (!buf) {
+      missing.push({ rel, meta });
+    }
+  }
+  if (!missing.length) return true;
+
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan(`Fetching ${missing.length} missing blobs (Lighthouse/Mantle)...`));
+
+  let litService: LitService | null = null;
+  let authSig: any = null;
+  let mantleSigner: any = null;
+
+  const hasEncrypted = entries.some(([, meta]) => meta.enc);
+  if (hasEncrypted) {
+    litService = new LitService();
+    mantleSigner = await loadMantleSigner();
+  }
+
+  for (const { rel, meta } of missing) {
+    let data: Buffer;
+    if (meta.cid) { // Lighthouse/IPFS
+      const res = await downloadFromLighthouseGateway(meta.cid, { verify: false });
+      data = Buffer.from(res.bytes);
+    } else {
+      throw new Error(`Cannot download ${rel}: missing CID for Mantle repo.`);
+    }
+
+    let plain: Buffer = data;
+    try {
+      if (meta.enc) {
+        const encAny = meta.enc as any;
+        if (encAny.alg === 'lit-aes-256-gcm') {
+          // Lit Decryption
+          if (!litService || !mantleSigner) throw new Error('Lit/Mantle env not initialized');
+          if (!authSig) {
+            // eslint-disable-next-line no-console
+            console.log(colors.gray('  Generating SIWE AuthSig...'));
+            authSig = await litService.getAuthSig(mantleSigner.signer);
+          }
+          const encMeta = {
+            alg: encAny.alg,
+            lit_encrypted_key: encAny.lit_encrypted_key,
+            unified_access_control_conditions: encAny.unified_access_control_conditions || encAny.access_control_conditions,
+            lit_hash: encAny.lit_hash || encAny.enc_hash, // fallback
+            iv: encAny.iv,
+            tag: encAny.tag
+          };
+
+          const sessionKey = await litService.decryptSessionKey(
+            encMeta.lit_encrypted_key,
+            encMeta.lit_hash,
+            encMeta.unified_access_control_conditions,
+            authSig
+          );
+
+          plain = decryptBuffer(
+            {
+              ciphertext: data,
+              iv: Buffer.from(encMeta.iv, 'hex'),
+              authTag: Buffer.from(encMeta.tag, 'hex'),
+            },
+            sessionKey
+          );
+
+        } else {
+          throw new Error(`Unsupported encryption alg on Mantle: ${encAny.alg}`);
+        }
+      }
+    } catch (err: any) {
+      if (err.message && (err.message.includes('NotAuthorized') || err.message.includes('not authorized'))) {
+        // eslint-disable-next-line no-console
+        console.log(colors.red(`❌ Access Denied: You do not have permission to decrypt ${rel}.`));
+      } else {
+        // eslint-disable-next-line no-console
+        console.log(colors.red(`❌ Failed to decrypt ${rel}: ${err.message}`));
+      }
+      if (litService) await litService.disconnect();
+      return false;
+    }
+    const hash = sha256Base64(plain);
+    if (hash !== meta.hash || plain.length !== meta.size) {
+      throw new Error(`Downloaded blob mismatch for ${rel} (hash: ${hash}, expected: ${meta.hash})`);
+    }
+    const blobPath = path.join(witPath, 'objects', 'blobs', blobFileName(meta.hash));
+    await ensureDirForFile(blobPath);
+    await fs.writeFile(blobPath, plain);
+  }
+
+  if (litService) {
+    await litService.disconnect();
+  }
+
   return true;
 }
 
@@ -233,6 +358,11 @@ async function fetchFileBytes(
       throw new Error(`Tag hash mismatch for ${rel}`);
     }
     return data;
+  }
+  // Fallback for types that might pass meta with just cid (cached manually handled above usually)
+  // But if ensureBlobsFromManifest calls this for a non-walrus file, safeguard:
+  if (meta.enc || (meta as any).cid) {
+    throw new Error(`Should have been handled by Lighthouse downloader.`);
   }
   throw new Error(`Manifest entry missing Walrus file id for ${rel}`);
 }

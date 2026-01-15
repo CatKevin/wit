@@ -1,11 +1,11 @@
-import {SuiClient} from '@mysten/sui/client';
-import {colors} from '../lib/ui';
-import {resolveWalrusConfig, WalrusService} from '../lib/walrus';
-import {fetchRepositoryStateWithRetry} from '../lib/suiRepo';
-import {ManifestSchema} from '../lib/schema';
-import {computeRootHash} from '../lib/manifest';
-import {canonicalStringify, sha256Base64} from '../lib/serialize';
-import {readCommitIdMap, writeCommitIdMap, idToFileName} from '../lib/state';
+import { SuiClient } from '@mysten/sui/client';
+import { colors } from '../lib/ui';
+import { resolveWalrusConfig, WalrusService } from '../lib/walrus';
+import { fetchRepositoryStateWithRetry } from '../lib/suiRepo';
+import { ManifestSchema } from '../lib/schema';
+import { computeRootHash } from '../lib/manifest';
+import { canonicalStringify, sha256Base64 } from '../lib/serialize';
+import { readCommitIdMap, writeCommitIdMap, idToFileName } from '../lib/state';
 import {
   readRepoConfig,
   requireWitDir,
@@ -30,7 +30,7 @@ type RemoteCommit = {
   author: string;
   message: string;
   timestamp: number;
-  extras?: {patch_id?: string | null; tags?: Record<string, string>};
+  extras?: { patch_id?: string | null; tags?: Record<string, string> };
 };
 
 export async function fetchAction(): Promise<void> {
@@ -40,10 +40,18 @@ export async function fetchAction(): Promise<void> {
     throw new Error('Missing repo_id in .wit/config.json. Cannot fetch.');
   }
 
+  if (repoCfg.chain === 'mantle') {
+    return fetchActionMantle(witPath, repoCfg);
+  } else {
+    return fetchActionSui(witPath, repoCfg);
+  }
+}
+
+async function fetchActionSui(witPath: string, repoCfg: any): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(colors.header('Fetching remote metadata...'));
   const resolved = await resolveWalrusConfig(process.cwd());
-  const suiClient = new SuiClient({url: resolved.suiRpcUrl});
+  const suiClient = new SuiClient({ url: resolved.suiRpcUrl });
   const walrusSvc = await WalrusService.fromRepo();
 
   const onchain = await fetchRepositoryStateWithRetry(suiClient, repoCfg.repo_id);
@@ -64,7 +72,7 @@ export async function fetchAction(): Promise<void> {
     Object.fromEntries(
       Object.entries(manifest.files).map(([rel, meta]) => [
         rel,
-        {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+        { hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime },
       ]),
     ),
   );
@@ -102,8 +110,83 @@ export async function fetchAction(): Promise<void> {
   console.log(`Quilt: ${colors.hash(onchain.headQuilt)}`);
 }
 
+// --------------------------------------------------------------------------
+// MANTLE IMPLEMENTATION
+// --------------------------------------------------------------------------
+
+import { loadMantleSigner } from '../lib/evmProvider';
+import { EvmRepoService, formatRepoId } from '../lib/evmRepo';
+import { downloadFromLighthouseGateway } from '../lib/lighthouse';
+import { downloadCommitChainMantle } from '../lib/evmClone';
+
+async function fetchActionMantle(witPath: string, repoCfg: any) {
+  // eslint-disable-next-line no-console
+  console.log(colors.header('Fetching remote metadata (Mantle)...'));
+
+  // 1. Load Contract State
+  const signerCtx = await loadMantleSigner();
+  const repoService = new EvmRepoService(signerCtx);
+
+  let repoId = BigInt(0);
+  const repoIdStr = repoCfg.repo_id;
+  if (repoIdStr.startsWith('mantle:')) {
+    repoId = BigInt(repoIdStr.split(':').pop()!);
+  } else {
+    repoId = BigInt(repoIdStr);
+  }
+
+  const onchain = await repoService.getRepoState(repoId);
+  if (!onchain || !onchain.headCommit) {
+    // eslint-disable-next-line no-console
+    console.log(colors.yellow('Remote repository has no head; nothing to fetch.'));
+    return;
+  }
+
+  // 2. Download Head Commit & Manifest
+  // eslint-disable-next-line no-console
+  console.log(colors.cyan(`Remote Head: ${onchain.headCommit}`));
+
+  const commitBuf = await downloadBuffer(onchain.headCommit);
+  const commit = parseRemoteCommit(commitBuf);
+  await cacheJson(path.join(witPath, 'objects', 'commits', `${idToFileName(onchain.headCommit)}.json`), commitBuf.toString('utf8'));
+
+  const manifestCid = commit.tree.manifest_cid || commit.tree.manifest_id;
+  if (!manifestCid) {
+    throw new Error('Remote commit missing manifest_cid');
+  }
+  const manifestBuf = await downloadBuffer(manifestCid);
+  // Cache manifest
+  await cacheJson(path.join(witPath, 'objects', 'manifests', `${idToFileName(manifestCid)}.json`), manifestBuf.toString('utf8'));
+
+  // 3. Sync History (Incremental)
+  const map = await readCommitIdMapSafe(witPath);
+  await downloadCommitChainMantle(onchain.headCommit, witPath, map);
+  await writeCommitIdMap(witPath, map);
+
+  // 4. Update References
+  await writeRemoteRef(witPath, onchain.headCommit);
+  await writeRemoteState(witPath, {
+    repo_id: repoCfg.repo_id,
+    head_commit: onchain.headCommit,
+    head_manifest: manifestCid,
+    head_quilt: '',
+    version: Number(onchain.version),
+  });
+
+  // eslint-disable-next-line no-console
+  console.log(colors.green('Fetch complete (worktree unchanged).'));
+  console.log(`Head: ${colors.hash(onchain.headCommit)}`);
+}
+
+async function downloadBuffer(cid: string): Promise<Buffer> {
+  const res = await downloadFromLighthouseGateway(cid, { verify: false });
+  return Buffer.from(res.bytes);
+}
+
+// function downloadCommitChainMantle moved to ../lib/evmClone.ts
+
 async function cacheJson(filePath: string, content: string): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), {recursive: true});
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, content, 'utf8');
 }
 
@@ -196,7 +279,7 @@ async function ensureManifestCached(
       Object.fromEntries(
         Object.entries(manifest.files).map(([rel, meta]) => [
           rel,
-          {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+          { hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime },
         ])
       )
     );
@@ -213,7 +296,7 @@ async function ensureManifestCached(
     Object.fromEntries(
       Object.entries(manifest.files).map(([rel, meta]) => [
         rel,
-        {hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime},
+        { hash: meta.hash, size: meta.size, mode: meta.mode, mtime: meta.mtime },
       ])
     )
   );
