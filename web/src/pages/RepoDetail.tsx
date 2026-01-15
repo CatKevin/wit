@@ -24,8 +24,8 @@ export default function RepoDetail() {
     const [selectedFile, setSelectedFile] = useState<{ path: string; fileRef: FileRef } | null>(null);
     const [selectedCommit, setSelectedCommit] = useState<any>(null);
 
-    const { data: manifest, isLoading: manifestLoading, error: manifestError } = useManifest(repo?.head_manifest);
-    const { commits, isLoading: commitsLoading, error: commitsError } = useCommitHistory(repo?.head_commit);
+    const { data: manifest, isLoading: manifestLoading, error: manifestError } = useManifest(repo?.headManifest);
+    const { commits, isLoading: commitsLoading, error: commitsError } = useCommitHistory(repo?.headCommit);
     const { data: fileContent, isLoading: fileLoading, error: fileError } = useFileContent(selectedFile?.fileRef);
 
     const handleCopy = () => {
@@ -103,7 +103,7 @@ export default function RepoDetail() {
                                     <div className="flex items-center gap-2">
                                         <h1 className="text-xl font-bold text-slate-900">{repo.name}</h1>
                                         <span className="text-slate-400 font-mono text-xs">v{repo.version}</span>
-                                        {repo.seal_policy_id && (
+                                        {repo.isPrivate && (
                                             <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
                                                 <Lock className="h-3 w-3 text-slate-500" />
                                                 <span className="text-xs text-slate-500">Private</span>
@@ -205,15 +205,18 @@ export default function RepoDetail() {
                                             <FileTree
                                                 manifest={manifest}
                                                 onSelectFile={(path, meta) => {
+                                                    // Get policy ID for Sui repos (seal_policy_id) or undefined for Mantle
+                                                    const policyId = repo.seal_policy_id || undefined;
+
                                                     if (meta?.blob_ref) {
-                                                        setSelectedFile({ path, fileRef: { blobId: meta.blob_ref, enc: meta.enc as any, policyId: repo.seal_policy_id } });
+                                                        setSelectedFile({ path, fileRef: { blobId: meta.blob_ref, enc: meta.enc as any, policyId } });
                                                     } else if (manifest.quilt_id) {
                                                         setSelectedFile({
                                                             path,
-                                                            fileRef: { quiltId: manifest.quilt_id, identifier: path, enc: meta.enc as any, policyId: repo.seal_policy_id },
+                                                            fileRef: { quiltId: manifest.quilt_id, identifier: path, enc: meta.enc as any, policyId },
                                                         });
                                                     } else {
-                                                        setSelectedFile({ path, fileRef: { blobId: meta.hash, enc: meta.enc as any, policyId: repo.seal_policy_id } });
+                                                        setSelectedFile({ path, fileRef: { blobId: meta.hash, enc: meta.enc as any, policyId } });
                                                     }
                                                 }}
                                                 selectedPath={selectedFile?.path}

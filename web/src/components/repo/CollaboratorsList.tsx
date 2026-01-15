@@ -6,7 +6,7 @@ import { Crown, Users, UserPlus, X, Loader2, AlertCircle, Check } from 'lucide-r
 import { AddressAvatar } from '@/components/ui/address-avatar';
 import { Copyable } from '@/components/ui/copyable';
 import { Button } from '@/components/ui/button';
-import type { Repository } from '@/lib/sui';
+import type { Repository } from '@/hooks/useRepository';
 
 const WIT_PACKAGE_ID = '0x8c91d82b2292ac53a4fa5b21de86b1073230ac1d17dd6ae336ab5b559c329e09';
 const WIT_MODULE_NAME = 'repository';
@@ -50,7 +50,7 @@ export function CollaboratorsList({ repo, onCollaboratorAdded }: CollaboratorsLi
             const tx = new Transaction();
 
             if (repo.seal_policy_id) {
-                // Private repo: use add_private_collaborator
+                // Private repo (Sui): use add_private_collaborator
                 tx.moveCall({
                     target: `${WIT_PACKAGE_ID}::${WIT_MODULE_NAME}::add_private_collaborator`,
                     arguments: [
@@ -105,7 +105,7 @@ export function CollaboratorsList({ repo, onCollaboratorAdded }: CollaboratorsLi
                     <Users className="h-4 w-4 text-slate-500" />
                     <span className="text-slate-600 text-sm font-medium">Contributors</span>
                     <span className="px-1.5 py-0.5 rounded-full bg-slate-200 text-xs text-slate-600">
-                        {1 + repo.collaborators.length}
+                        {1 + (repo.collaborators?.length || 0)}
                     </span>
                 </div>
                 {canInvite && (
@@ -140,9 +140,9 @@ export function CollaboratorsList({ repo, onCollaboratorAdded }: CollaboratorsLi
             </div>
 
             {/* Collaborators */}
-            {repo.collaborators.length > 0 ? (
+            {(repo.collaborators?.length || 0) > 0 ? (
                 <div className="divide-y divide-slate-100">
-                    {repo.collaborators.map((collab, index) => (
+                    {repo.collaborators?.map((collab, index) => (
                         <motion.div
                             key={collab}
                             initial={{ opacity: 0, y: 10 }}
@@ -245,7 +245,7 @@ export function CollaboratorsList({ repo, onCollaboratorAdded }: CollaboratorsLi
                                     </motion.div>
                                 )}
 
-                                {repo.seal_policy_id && (
+                                {repo.isPrivate && (
                                     <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
                                         <p className="text-xs text-slate-600">
                                             This is a private repository. The user will be added to the whitelist and will be able to decrypt repository content.

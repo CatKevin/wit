@@ -222,7 +222,7 @@ export default function CommitDetailPage() {
                         changes={changes}
                         currentQuiltId={commit.commit.tree.quilt_id || undefined}
                         parentQuiltId={parentCommit?.commit?.tree?.quilt_id || undefined}
-                        policyId={repo?.seal_policy_id}
+                        policyId={repo?.seal_policy_id || undefined}
                     />
                 </motion.div>
 

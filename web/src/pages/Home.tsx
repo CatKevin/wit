@@ -6,6 +6,8 @@ import { GitBranch, Loader2, Lock, Shield, Users, Wallet, ExternalLink } from "l
 import { useUserRepositories } from '@/hooks/useUserRepositories';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { ConnectButton } from '@mysten/dapp-kit';
+import { useEvmAccount } from '@/hooks/useEvmAccount';
+import { useChainContext } from '@/hooks/useChainContext';
 import logo from '@/assets/logo.png';
 
 // Landing 组件
@@ -24,11 +26,19 @@ import {
 
 export default function Home() {
     const navigate = useNavigate();
-    const account = useCurrentAccount();
+    const suiAccount = useCurrentAccount();
+    const { address: evmAddress, isConnected: evmConnected } = useEvmAccount();
+    const { isMantle } = useChainContext();
     const { data: userRepos, isLoading: isLoadingUserRepos } = useUserRepositories();
 
+    // Check if any wallet is connected (Sui or EVM)
+    const isWalletConnected = isMantle ? evmConnected : !!suiAccount;
+    const displayAddress = isMantle
+        ? evmAddress
+        : suiAccount?.address;
+
     // 已连接钱包 - 显示仓库列表
-    if (account) {
+    if (isWalletConnected && displayAddress) {
         return (
             <motion.div
                 className="max-w-5xl mx-auto py-8"
@@ -43,13 +53,15 @@ export default function Home() {
 
                 <div className="flex items-center gap-4 mb-8 p-4 bg-slate-50 rounded-xl">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold">
-                        {account.address.slice(2, 4).toUpperCase()}
+                        {displayAddress.slice(2, 4).toUpperCase()}
                     </div>
                     <div>
                         <div className="font-mono text-sm text-slate-900">
-                            {account.address.slice(0, 10)}...{account.address.slice(-8)}
+                            {displayAddress.slice(0, 10)}...{displayAddress.slice(-8)}
                         </div>
-                        <div className="text-xs text-slate-500">Connected Wallet</div>
+                        <div className="text-xs text-slate-500">
+                            {isMantle ? 'Mantle Wallet' : 'Sui Wallet'}
+                        </div>
                     </div>
                 </div>
 
