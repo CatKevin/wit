@@ -1,1 +1,4 @@
 LIGHTHOUSE_API_KEY=xxxxxxxx
+
+# Just for testing！Please do not use this in a production environment.
+LIT_PLATFORM_PRIVATE_KEY=xxxxxxxx
