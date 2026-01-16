@@ -1,4 +1,34 @@
 #!/usr/bin/env node
+
+// Suppress noisy Lit SDK deprecation warnings (written to stderr)
+const originalStderrWrite = process.stderr.write;
+// @ts-ignore
+process.stderr.write = function (chunk: any, encoding?: any, cb?: any): boolean {
+  const str = chunk.toString();
+  if (
+    str.includes('deprecated LogLevel is deprecated') ||
+    str.includes('LitErrorKind is deprecated')
+  ) {
+    return false;
+  }
+  return originalStderrWrite.apply(process.stderr, [chunk, encoding, cb] as any);
+};
+
+// Also suppress console.warn just in case
+const originalWarn = console.warn;
+console.warn = (...args: any[]) => {
+  if (
+    args.length > 0 &&
+    typeof args[0] === 'string' &&
+    (args[0].includes('deprecated LogLevel is deprecated') ||
+      args[0].includes('LitErrorKind is deprecated'))
+  ) {
+    return;
+  }
+  originalWarn(...args);
+};
+
+
 import { Command } from 'commander';
 import { registerCommands } from './commands/registerCommands';
 import pkg from '../package.json';
@@ -17,20 +47,6 @@ if (!globalThis.crypto) {
   globalThis.crypto = crypto as any;
 }
 
-
-
-// Suppress noisy Lit SDK deprecation warnings
-const originalWarn = console.warn;
-console.warn = (...args: any[]) => {
-  if (
-    args.length > 0 &&
-    typeof args[0] === 'string' &&
-    args[0].includes('deprecated LogLevel is deprecated')
-  ) {
-    return;
-  }
-  originalWarn(...args);
-};
 
 const VERSION = pkg.version || '0.0.0';
 

@@ -5,18 +5,14 @@ import { LIT_NETWORK } from "@lit-protocol/constants";
 // Force use of v5 from contracts-sdk dependencies
 const ethersV5 = require('@lit-protocol/contracts-sdk/node_modules/ethers');
 const { Wallet, providers } = ethersV5;
-import * as dotenv from 'dotenv';
+import { LIT_PLATFORM_PRIVATE_KEY } from '../src/config';
 import path from 'path';
 
 // Load .env from cli root
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-const PLATFORM_PRIVATE_KEY = process.env.LIT_PLATFORM_PRIVATE_KEY;
+const PLATFORM_PRIVATE_KEY = LIT_PLATFORM_PRIVATE_KEY;
 
-if (!PLATFORM_PRIVATE_KEY) {
-    console.error("❌ LIT_PLATFORM_PRIVATE_KEY not found in .env");
-    process.exit(1);
-}
 
 async function mintCapacityCredit() {
     console.log("🔄 Connecting to Chronicle Yellowstone (Chain ID: 175188)...");

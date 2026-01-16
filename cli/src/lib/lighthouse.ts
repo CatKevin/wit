@@ -90,14 +90,18 @@ let globalConfigCache: LighthouseGlobalConfig = {};
 const DEFAULT_LIGHTHOUSE_PIN_URL = 'https://api.lighthouse.storage/api/lighthouse/pin';
 const DEFAULT_CACHE_FILE = 'lighthouse-uploads.json';
 
+import { LIGHTHOUSE_API_KEY } from '../config';
+
 export function resolveLighthouseApiKey(): string | null {
   loadDotEnvOnce();
   const envKey = process.env.LIGHTHOUSE_API_KEY || process.env.WIT_LIGHTHOUSE_API_KEY;
   if (envKey) return envKey;
+
   const cfg = loadGlobalConfigOnce();
   const cfgKey = cfg.lighthouse_api_key || cfg.lighthouseApiKey;
   if (typeof cfgKey === 'string' && cfgKey.trim().length > 0) return cfgKey;
-  return null;
+
+  return LIGHTHOUSE_API_KEY;
 }
 
 export function resolveLighthouseGatewayUrl(): string {

@@ -3,7 +3,7 @@ import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { LIT_NETWORK, LIT_ABILITY } from "@lit-protocol/constants";
 import { LitAccessControlConditionResource, LitActionResource, generateAuthSig, createSiweMessageWithResources } from "@lit-protocol/auth-helpers";
 import { loadEvmKey } from '../src/lib/evmKeys';
-import * as dotenv from 'dotenv';
+import { LIT_PLATFORM_PRIVATE_KEY } from '../src/config';
 import path from 'path';
 import crypto from 'crypto';
 
@@ -15,16 +15,9 @@ if (!globalThis.crypto) {
 const ethersV5 = require('@lit-protocol/contracts-sdk/node_modules/ethers');
 const { Wallet } = ethersV5;
 
-// Load .env from cli root
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
-
-const PLATFORM_PRIVATE_KEY = process.env.LIT_PLATFORM_PRIVATE_KEY;
+const PLATFORM_PRIVATE_KEY = LIT_PLATFORM_PRIVATE_KEY;
 const CAPACITY_TOKEN_ID = "369618";
 
-if (!PLATFORM_PRIVATE_KEY) {
-    console.error("❌ LIT_PLATFORM_PRIVATE_KEY not found in .env");
-    process.exit(1);
-}
 
 const LIT_ACTION_IPFS_CID = "Qma8FtFLwvYxBBfgUDy9z1ShCBJJvJqaxBbg9w9aKpEgVF";
 const MANTLE_CONTRACT = "0xf5db3fb6c5C94348dB6Ab32236f16002514ff4F9";
