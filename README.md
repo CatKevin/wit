@@ -41,8 +41,8 @@ Your code is encrypted **locally** (AES-256-GCM) before it ever leaves your mach
 ### 🌍 Resilient Distributed Storage
 Files are stored on **IPFS** (InterPlanetary File System) via decentralized pinning services (Lighthouse). Your repository survives outages, censorship, and data center failures.
 
-### 🔑 Dynamic Access Control
-Access is managed via **Smart Contracts** and **Lit Protocol**.
+### 🔑 Dynamic Access Control via Mantle L2
+Access is managed via **Smart Contracts on Mantle Network** and **Lit Protocol**.
 - **No shared passwords**: Session keys are encrypted specifically for authorized wallet addresses.
 - **Instant Revocation**: Remove a collaborator on-chain, and they immediately lose access to future updates.
 
@@ -82,6 +82,21 @@ wit pull                  # Pull updates
 wit invite 0xabc...      # Add collaborator (updates contract)
 wit status                # Check repo status
 ```
+
+### See it in Action
+
+**1. Secure & Private Initialization**
+User A initializes a private repository. Code is encrypted locally before being stored on decentralized IPFS nodes.
+![CLI Demo 1](https://github.com/CatKevin/wit/blob/main/images/1.png?raw=true)
+
+**2. Trustless Collaboration via Mantle Network**
+User A grants access to User B via a lightning-fast transaction on **Mantle Network**. No central server controls permissions—only the immutable smart contract on Mantle does.
+![CLI Demo 2](https://github.com/CatKevin/wit/blob/main/images/2.png?raw=true)
+
+**3. Decentralized Decryption**
+User B clones the repository. Their wallet signature proves access rights to the Lit Protocol nodes, allowing distinct decryption of the content.
+![CLI Demo 3](https://github.com/CatKevin/wit/blob/main/images/3.png?raw=true)
+
 
 ## Withub Web Interface
 
