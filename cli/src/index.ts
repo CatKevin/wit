@@ -54,7 +54,7 @@ export async function run(argv = process.argv): Promise<void> {
   const program = new Command();
   program
     .name('wit')
-    .description('wit CLI: single-branch, verifiable, optionally encrypted repo tool backed by Walrus + Sui')
+    .description('Wit with Withub: A private, decentralized alternative to Git with GitHub')
     .version(VERSION);
 
   registerCommands(program);

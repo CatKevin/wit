@@ -8,7 +8,7 @@ Now supporting multi-chain architecture:
 The CLI routes commands to the appropriate chain and storage backend based on your configuration.
 
 ## Requirements
-- Node.js >= 18.
+- Node.js >= 20.
 - **For Mantle**: A Lighthouse API Key (get one at [Lighthouse Storage](https://lighthouse.storage)).
 - **For Sui**: Access to a Walrus relay (configured by default).
 
